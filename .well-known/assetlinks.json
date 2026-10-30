@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.maneesh.mdbudget",
+        "sha256_cert_fingerprints": ["33:6E:69:93:FC:E3:47:85:E5:D6:F6:A8:F9:17:8D:36:87:54:32:E8:25:3E:26:5A:31:48:FC:90:89:7A:43:A7"]
+      }
+    }]
