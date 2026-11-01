@@ -108,7 +108,7 @@ body.privacy .moneyval,body.privacy .metric strong,body.privacy .amount,body.pri
 
 .auth-overlay{position:fixed;inset:0;z-index:9999;background:#0b433af2;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto}
 .auth-box{width:min(100%,440px);background:#fff;border-radius:20px;padding:22px;box-shadow:0 20px 60px #0004;max-height:96vh;overflow:auto}
-.auth-box h2{margin:0 0 8px;font-size:22px}.auth-box p{color:var(--muted);font-size:13px;line-height:1.55}.auth-box .field{margin:12px 0}.auth-box .btn{width:100%;margin-top:8px}.auth-note{font-size:11%!important;background:#fff8e6;border-radius:10px;padding:10px}
+.auth-box h2{margin:0 0 8px;font-size:22px}.auth-box p{color:var(--muted);font-size:13px;line-height:1.55}.auth-box .field{margin:12px 0}.auth-box .btn{width:100%;margin-top:8px}.auth-note{font-size:11px!important;background:#fff8e6;border-radius:10px;padding:10px}
 .auth-msg{font-size:12px;margin-top:8px;min-height:16px;font-weight:700}.auth-msg.error{color:var(--red)}.auth-msg.success{color:#059669}
 
 .avatar-circle{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#145c50,#26836f);color:#fff;display:grid;place-items:center;font-size:30px;font-weight:900;margin:0 auto 10px}
@@ -875,7 +875,11 @@ const dict = {
   type_investment: {hi:"निवेश", en:"Investment"},
   type_asset: {hi:"संपत्ति", en:"Asset"},
   type_interest: {hi:"ब्याज / पेनल्टी", en:"Interest/Penalty"},
-  type_transfer: {hi:"ट्रांसफर", en:"Transfer"}
+  type_transfer: {hi:"ट्रांसफर", en:"Transfer"},
+  int_penalty_opt: {hi:"ब्याज (पेनल्टी)", en:"Interest (Penalty)"},
+  int_reward_opt: {hi:"ब्याज (रिवॉर्ड)", en:"Interest (Reward)"},
+  adj_penalty_desc: {hi:"ब्याज (पेनल्टी): ", en:"Interest (Penalty): "},
+  adj_reward_desc: {hi:"ब्याज (रिवॉर्ड): ", en:"Interest (Reward): "}
 };
 function t(k){const e=dict[k];return e?(e[currentLang]||e.hi||k):k;}
 
@@ -1021,7 +1025,14 @@ function setTxnFields(){
     show('tToWrap',true);show('tFromWrap',true);
     $('tToLabel').textContent=t('dr_interest');
     $('tFromLabel').textContent=t('cr_interest');
-    let all=accounts('bank').concat(accounts('cash'),accounts('card'),accounts('loan'),accounts('familytaken'),accounts('familygiven'),accounts('investment'));
+    let permanentOpts=[
+      {id:'source_int_penalty',name:t('int_penalty_opt')},
+      {id:'source_int_reward',name:t('int_reward_opt')}
+    ];
+    let all=permanentOpts.concat(
+      accounts('bank'),accounts('cash'),accounts('card'),
+      accounts('loan'),accounts('familytaken'),accounts('familygiven'),accounts('investment')
+    );
     fillSelect($('tToAccount'),all,t('sel_dr'));
     fillSelect($('tFromAccount'),all,t('sel_cr'));
     $('entryHint').textContent=t('hint_adjust');
@@ -1105,12 +1116,45 @@ $('txnForm').addEventListener('submit',e=>{
       if(fromA.type==='card'){change(fromA,'available',-amt);}else{change(fromA,'balance',-amt);}
       accountId=fromA.id;
     }else if(type==='adjust'){
-      if(!toA)throw Error(t('sel_to_short'));
-      if(!fromA)throw Error(t('sel_from_short2'));
-      if(toA.id===fromA.id)throw Error(t('same_acc_adj'));
-      if(toA.type==='card'){change(toA,'available',amt);}else{change(toA,'balance',amt);}
-      if(fromA.type==='card'){change(fromA,'available',-amt);}else{change(fromA,'balance',-amt);}
-      desc=t('interest_adj');accountId=toA.id;
+      if(!toVal)throw Error(t('sel_to_short'));
+      if(!fromVal)throw Error(t('sel_from_short2'));
+      if(toVal===fromVal)throw Error(t('same_acc_adj'));
+
+      let hasPenalty = (toVal==='source_int_penalty' || fromVal==='source_int_penalty');
+      let hasReward  = (toVal==='source_int_reward'  || fromVal==='source_int_reward');
+
+      function applySmartAdjust(acc, side){
+        if(!acc) return;
+        let isDebt = ['loan','familytaken'].includes(acc.type);
+        if(acc.type==='card'){
+          if(hasPenalty) change(acc,'available',-amt);
+          else if(hasReward) change(acc,'available',amt);
+          else change(acc,'available', side==='to' ? amt : -amt);
+        }else if(isDebt){
+          if(hasPenalty) change(acc,'balance',amt);
+          else if(hasReward) change(acc,'balance',-amt);
+          else change(acc,'balance', side==='to' ? amt : -amt);
+        }else{
+          if(hasPenalty) change(acc,'balance',-amt);
+          else if(hasReward) change(acc,'balance',amt);
+          else change(acc,'balance', side==='to' ? amt : -amt);
+        }
+      }
+
+      if(toA) applySmartAdjust(toA, 'to');
+      if(fromA) applySmartAdjust(fromA, 'from');
+
+      let targetAcc = toA || fromA;
+      accountId = targetAcc ? targetAcc.id : null;
+
+      if(hasReward){
+        isIncome = (targetAcc && ['bank','cash','investment'].includes(targetAcc.type)) ? true : false;
+        desc = t('adj_reward_desc') + (targetAcc ? label(targetAcc) : '');
+      }else if(hasPenalty){
+        desc = t('adj_penalty_desc') + (targetAcc ? label(targetAcc) : '');
+      }else{
+        desc = t('interest_adj');
+      }
     }else if(type==='familypay'){
       if(!toA)throw Error(t('sel_to_short'));
       if(!fromA)throw Error(t('sel_from_short2'));
@@ -1138,7 +1182,7 @@ $('txnForm').addEventListener('submit',e=>{
       if(invTypes.includes(toA.type)&&moneyTypes.includes(fromA.type)){
         change(toA,'balance',amt);change(fromA,'balance',-amt);desc=t('inv_deposit')+toA.name;accountId=toA.id;
       }else if(moneyTypes.includes(toA.type)&&invTypes.includes(fromA.type)){
-        change(fromA,'balance',-amt);change(toA,'balance',amt);desc=t('inv_withdraw')+fromA.name;accountId=fromA.id;
+        change(fromA,'balance',-amt);change(toA,'balance',amt);desc=t('inv_withdraw')+fromA.name;accountId=toA.id;
       }else{throw Error(t('inv_error'));}
     }
     db.txns.push({id:id(),type,amount:amt,date,desc,note:$('tNote').value.trim(),accountId,categoryId,isIncome,changes});
@@ -1762,6 +1806,113 @@ window.addEventListener('DOMContentLoaded',()=>{
   applyLanguage();
 });
 window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')||$('graph')?.classList.contains('active'))requestAnimationFrame(renderGraph)});
+</script>
+
+<!-- Capacitor AdMob Integration (Banner, Interstitial Video & Rewarded Ad) -->
+<script>
+(function(){
+  const ADMOB_APP_ID = 'ca-app-pub-583188129330144~2578300444';
+  const ADMOB_BANNER_ID = 'ca-app-pub-583188129330144/2991789064';
+  const ADMOB_INTERSTITIAL_ID = 'ca-app-pub-583188129330144/8965625723';
+  const ADMOB_REWARDED_ID = 'ca-app-pub-583188129330144/7767047947';
+
+  let AdMobPlugin = null;
+  let interstitialReady = false;
+  let rewardedReady = false;
+
+  async function initAdMob() {
+    const cap = window.Capacitor;
+    if (!cap || !cap.Plugins || !cap.Plugins.AdMob) return;
+    AdMobPlugin = cap.Plugins.AdMob;
+
+    try {
+      await AdMobPlugin.initialize({ initializeForTesting: false });
+
+      await AdMobPlugin.showBanner({
+        adId: ADMOB_BANNER_ID,
+        adSize: 'ADAPTIVE_BANNER',
+        position: 'BOTTOM_CENTER',
+        margin: 0
+      });
+      document.body.style.paddingBottom = '120px';
+
+      await preloadInterstitial();
+      await preloadRewarded();
+    } catch (e) {
+      console.log('AdMob init info:', e);
+    }
+  }
+
+  async function preloadInterstitial() {
+    if (!AdMobPlugin) return;
+    try {
+      await AdMobPlugin.prepareInterstitial({ adId: ADMOB_INTERSTITIAL_ID });
+      interstitialReady = true;
+    } catch (e) { interstitialReady = false; }
+  }
+
+  async function preloadRewarded() {
+    if (!AdMobPlugin) return;
+    try {
+      await AdMobPlugin.prepareRewardVideoAd({ adId: ADMOB_REWARDED_ID });
+      rewardedReady = true;
+    } catch (e) { rewardedReady = false; }
+  }
+
+  window.showAppVideoAd = async function() {
+    if (!AdMobPlugin) return;
+    try {
+      if (interstitialReady) {
+        await AdMobPlugin.showInterstitial();
+        interstitialReady = false;
+        setTimeout(preloadInterstitial, 2000);
+      } else { preloadInterstitial(); }
+    } catch (e) { preloadInterstitial(); }
+  };
+
+  window.showAppRewardAd = async function(onSuccess) {
+    if (!AdMobPlugin) { if(onSuccess) onSuccess(); return; }
+    try {
+      if (rewardedReady) {
+        const reward = await AdMobPlugin.showRewardVideoAd();
+        rewardedReady = false;
+        setTimeout(preloadRewarded, 2000);
+        if(onSuccess) onSuccess();
+      } else {
+        preloadRewarded();
+        if(onSuccess) onSuccess();
+      }
+    } catch (e) {
+      preloadRewarded();
+      if(onSuccess) onSuccess();
+    }
+  };
+
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initAdMob, 1200);
+
+    const txnForm = document.getElementById('txnForm');
+    if (txnForm) {
+      txnForm.addEventListener('submit', () => {
+        setTimeout(() => { if(window.showAppVideoAd) window.showAppVideoAd(); }, 400);
+      });
+    }
+
+    const origDownload = window.downloadStatement;
+    if (typeof origDownload === 'function') {
+      window.downloadStatement = function(type) {
+        window.showAppRewardAd(() => { origDownload(type); });
+      };
+    }
+
+    const origExport = window.exportData;
+    if (typeof origExport === 'function') {
+      window.exportData = function() {
+        window.showAppRewardAd(() => { origExport(); });
+      };
+    }
+  });
+})();
 </script>
 
 <!-- Service Worker Registration (PWA) -->
