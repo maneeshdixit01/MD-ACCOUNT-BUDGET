@@ -6,67 +6,52 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v5
+      - name: Checkout Repository
+        uses: actions/checkout@v5
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v5
-      with:
-        node-version: 22
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v5
-      with:
-        distribution: 'temurin'
-        java-version: '17'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Prepare Web Assets & Capacitor
-      run: |
-        # अगर package.json नहीं है तो अपने आप बना लेगा
-        if [ ! -f package.json ]; then
+      - name: Prepare Web Assets & Capacitor
+        run: |
+          rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www
           npm init -y
-        fi
-        
-        # Capacitor के जरूरी पैकेज इंस्टॉल करेगा
-        npm install @capacitor/core @capacitor/cli @capacitor/android
-        
-        # वेब फाइलों के लिए 'www' फोल्डर तैयार करेगा और आपकी फाइलें उसमें डालेगा
-        mkdir -p www
-        find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" \) ! -name "package*.json" ! -name "capacitor.config.json" -exec cp {} www/ \;
-        
-        # अगर index.html किसी और नाम से है तो भी एरर न आए
-        if [ ! -f www/index.html ]; then
-          FIRST_HTML=$(find www -maxdepth 1 -name "*.html" | head -n 1)
-          if [ -n "$FIRST_HTML" ]; then
-            cp "$FIRST_HTML" www/index.html
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          mkdir -p www
+          find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
+          if [ ! -f www/index.html ]; then
+            FIRST_HTML=$(find www -maxdepth 1 -name "*.html" | head -n 1)
+            if [ -n "$FIRST_HTML" ]; then
+              cp "$FIRST_HTML" www/index.html
+            else
+              echo "<h1>MD Accounts</h1>" > www/index.html
+            fi
           fi
-        fi
+          npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
-        # Capacitor की सही कॉन्फ़िगरेशन फाइल बनाएगा (बिना किसी एरर के)
-        cat << 'EOF' > capacitor.config.json
-        {
-          "appId": "com.md.accountbudget",
-          "appName": "MD Accounts",
-          "webDir": "www"
-        }
-        EOF
+      - name: Add Android Platform
+        run: |
+          npx cap add android
+          npx cap sync android
 
-    - name: Add Android Platform
-      run: |
-        rm -rf android
-        npx cap add android
-        npx cap sync android
+      - name: Build Release AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
 
-    - name: Build Release AAB
-      run: |
-        cd android
-        chmod +x gradlew
-        ./gradlew bundleRelease
-
-    - name: Upload AAB Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release-aab
-        path: android/app/build/outputs/bundle/release/*.aab
+      - name: Upload AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: android/app/build/outputs/bundle/release/*.aab
