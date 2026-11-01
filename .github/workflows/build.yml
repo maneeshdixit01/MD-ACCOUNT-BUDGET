@@ -1,4 +1,4 @@
-name: Build Android App Bundle
+name: Build Signed Android App
 
 on:
   push:
@@ -44,14 +44,35 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Build Release AAB
+      - name: Prepare Keystore (Digital Signing Key)
+        run: |
+          # अगर रिपॉजिटरी में पहले से चाबी रखी है तो वही इस्तेमाल करेगा, वरना नई बनाएगा
+          if [ -f "md-release-key.jks" ]; then
+            cp md-release-key.jks android/app/md-release-key.jks
+          else
+            keytool -genkey -v -keystore android/app/md-release-key.jks \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias md_key \
+              -storepass MdAccount@123 -keypass MdAccount@123 \
+              -dname "CN=Maneesh Kumar Dixit, OU=IT, O=MD Accounts, L=Lucknow, ST=UP, C=IN"
+            cp android/app/md-release-key.jks ./md-release-key.jks
+          fi
+
+      - name: Build & Sign Release AAB and APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease assembleRelease \
+            -Pandroid.injected.signing.store.file=$PWD/app/md-release-key.jks \
+            -Pandroid.injected.signing.store.password=MdAccount@123 \
+            -Pandroid.injected.signing.key.alias=md_key \
+            -Pandroid.injected.signing.key.password=MdAccount@123
 
-      - name: Upload AAB Artifact
+      - name: Upload Signed AAB, APK & Keystore
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-aab
-          path: android/app/build/outputs/bundle/release/*.aab
+          name: MD-Accounts-Release-Bundle
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/release/*.apk
+            md-release-key.jks
