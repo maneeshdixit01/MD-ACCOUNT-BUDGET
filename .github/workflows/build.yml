@@ -6,15 +6,15 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up Node.js
       uses: actions/setup-node@v5
       with:
-        node-version: 20
+        node-version: 22
 
     - name: Set up JDK 17
       uses: actions/setup-java@v5
@@ -22,22 +22,51 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Install Capacitor & Dependencies
+    - name: Prepare Web Assets & Capacitor
       run: |
-        npm install
-        npx cap init --force
+        # अगर package.json नहीं है तो अपने आप बना लेगा
+        if [ ! -f package.json ]; then
+          npm init -y
+        fi
+        
+        # Capacitor के जरूरी पैकेज इंस्टॉल करेगा
+        npm install @capacitor/core @capacitor/cli @capacitor/android
+        
+        # वेब फाइलों के लिए 'www' फोल्डर तैयार करेगा और आपकी फाइलें उसमें डालेगा
+        mkdir -p www
+        find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" \) ! -name "package*.json" ! -name "capacitor.config.json" -exec cp {} www/ \;
+        
+        # अगर index.html किसी और नाम से है तो भी एरर न आए
+        if [ ! -f www/index.html ]; then
+          FIRST_HTML=$(find www -maxdepth 1 -name "*.html" | head -n 1)
+          if [ -n "$FIRST_HTML" ]; then
+            cp "$FIRST_HTML" www/index.html
+          fi
+        fi
+
+        # Capacitor की सही कॉन्फ़िगरेशन फाइल बनाएगा (बिना किसी एरर के)
+        cat << 'EOF' > capacitor.config.json
+        {
+          "appId": "com.md.accountbudget",
+          "appName": "MD Accounts",
+          "webDir": "www"
+        }
+        EOF
 
     - name: Add Android Platform
       run: |
+        rm -rf android
         npx cap add android
+        npx cap sync android
 
     - name: Build Release AAB
       run: |
         cd android
+        chmod +x gradlew
         ./gradlew bundleRelease
 
     - name: Upload AAB Artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-release-aab
-        path: android/app/build/outputs/bundle/release/app-release.aab
+        path: android/app/build/outputs/bundle/release/*.aab
