@@ -1,4 +1,4 @@
-name: Build Signed Android App
+name: Build Signed Android App with AdMob
 
 on:
   push:
@@ -22,11 +22,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Prepare Web Assets & Capacitor
+      - name: Prepare Web Assets, Capacitor & AdMob
         run: |
           rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www
           npm init -y
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6
           mkdir -p www
           find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
           if [ ! -f www/index.html ]; then
@@ -37,16 +37,52 @@ jobs:
               echo "<h1>MD Accounts</h1>" > www/index.html
             fi
           fi
+
+          # अगर index.html में AdMob स्क्रिप्ट नहीं है तो आपकी तीनों IDs के साथ ऑटोमैटिक जोड़ देगा
+          if ! grep -q "2591789064" www/index.html; then
+            cat << 'EOF' >> www/index.html
+          <script>
+          document.addEventListener('DOMContentLoaded', async function() {
+            const AdMob = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob;
+            if (!AdMob) return;
+            try {
+              await AdMob.initialize();
+              await AdMob.showBanner({
+                adId: 'ca-app-pub-5831881293330144/2591789064',
+                adSize: 'ADAPTIVE_BANNER',
+                position: 'BOTTOM_CENTER',
+                margin: 0,
+                isTesting: false
+              });
+              await AdMob.prepareInterstitial({
+                adId: 'ca-app-pub-5831881293330144/8965625723',
+                isTesting: false
+              });
+              await AdMob.prepareRewardVideoAd({
+                adId: 'ca-app-pub-5831881293330144/7767047947',
+                isTesting: false
+              });
+            } catch (e) {
+              console.error('AdMob Init Error:', e);
+            }
+          });
+          </script>
+          EOF
+          fi
+
           npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
-      - name: Add Android Platform
+      - name: Add Android Platform & Inject AdMob App ID
         run: |
           npx cap add android
+          
+          # AndroidManifest.xml में आपकी असली AdMob App ID जोड़ेगा
+          sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
+          
           npx cap sync android
 
       - name: Prepare Keystore (Digital Signing Key)
         run: |
-          # अगर रिपॉजिटरी में पहले से चाबी रखी है तो वही इस्तेमाल करेगा, वरना नई बनाएगा
           if [ -f "md-release-key.jks" ]; then
             cp md-release-key.jks android/app/md-release-key.jks
           else
@@ -71,7 +107,7 @@ jobs:
       - name: Upload Signed AAB, APK & Keystore
         uses: actions/upload-artifact@v4
         with:
-          name: MD-Accounts-Release-Bundle
+          name: MD-Accounts-AdMob-Release
           path: |
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/release/*.apk
