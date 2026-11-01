@@ -1,4 +1,4 @@
-name: Build Signed Android App with AdMob
+name: Build Signed Android App with Custom Logo & AdMob
 
 on:
   push:
@@ -24,9 +24,9 @@ jobs:
 
       - name: Prepare Web Assets, Capacitor & AdMob
         run: |
-          rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www
+          rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www assets
           npm init -y
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/assets
           mkdir -p www
           find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
           if [ ! -f www/index.html ]; then
@@ -38,7 +38,6 @@ jobs:
             fi
           fi
 
-          # अगर index.html में AdMob स्क्रिप्ट नहीं है तो आपकी तीनों IDs के साथ ऑटोमैटिक जोड़ देगा
           if ! grep -q "2591789064" www/index.html; then
             cat << 'EOF' >> www/index.html
           <script>
@@ -72,11 +71,30 @@ jobs:
 
           npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
-      - name: Add Android Platform & Inject AdMob App ID
+      - name: Add Android Platform, Custom Logo & AdMob ID
         run: |
           npx cap add android
           
-          # AndroidManifest.xml में आपकी असली AdMob App ID जोड़ेगा
+          mkdir -p assets
+          # सीधे आपकी अपलोड की गई icon-512.png फाइल का इस्तेमाल करेगा
+          if [ -f "icon-512.png" ]; then
+            echo "Using icon-512.png for app logo"
+            sudo apt-get update && sudo apt-get install -y imagemagick
+            convert icon-512.png -resize 1024x1024\! assets/icon-only.png
+            cp assets/icon-only.png assets/icon-foreground.png
+            convert -size 1024x1024 xc:white assets/icon-background.png
+            convert icon-512.png -gravity center -background white -extent 2732x2732 assets/splash.png
+            npx capacitor-assets generate --android
+          elif [ -f "icon-192.png" ]; then
+            echo "Using icon-192.png for app logo"
+            sudo apt-get update && sudo apt-get install -y imagemagick
+            convert icon-192.png -resize 1024x1024\! assets/icon-only.png
+            cp assets/icon-only.png assets/icon-foreground.png
+            convert -size 1024x1024 xc:white assets/icon-background.png
+            convert icon-192.png -gravity center -background white -extent 2732x2732 assets/splash.png
+            npx capacitor-assets generate --android
+          fi
+
           sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
           
           npx cap sync android
@@ -107,7 +125,7 @@ jobs:
       - name: Upload Signed AAB, APK & Keystore
         uses: actions/upload-artifact@v4
         with:
-          name: MD-Accounts-AdMob-Release
+          name: MD-Accounts-Logo-Release
           path: |
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/release/*.apk
