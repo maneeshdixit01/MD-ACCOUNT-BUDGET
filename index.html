@@ -1543,7 +1543,19 @@ function deleteTxn(i){
   db.txns=db.txns.filter(y=>y.id!==i);save();
 }
 
-function exportData(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='mera-hisab-backup-'+today()+'.json';a.click();URL.revokeObjectURL(url)}
+function exportData() {
+    try {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "MD_Accounts_Backup_" + new Date().toISOString().slice(0,10) + ".json");
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    } catch (e) {
+        alert("बैकअप डाउनलोड करने में त्रुटि: " + e.message);
+    }
+}
 function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.accounts)||!Array.isArray(d.txns))throw Error();d.accounts=d.accounts.map(a=>({rate:0,limit:0,available:0,emi:0,weight:0,...a}));d.txns=d.txns.map(t=>({...t,changes:Array.isArray(t.changes)?t.changes:[]}));if(confirm(t('load_backup_confirm'))){db=d;save();alert(t('backup_loaded'))}}catch(err){alert(t('invalid_backup'))}e.target.value=''};r.readAsText(f)}
 function nextDate(day){if(!day)return null;let now=new Date(),d=new Date(now.getFullYear(),now.getMonth(),Math.min(day,new Date(now.getFullYear(),now.getMonth()+1,0).getDate()));if(d<new Date(now.getFullYear(),now.getMonth(),now.getDate()))d=new Date(now.getFullYear(),now.getMonth()+1,Math.min(day,new Date(now.getFullYear(),now.getMonth()+2,0).getDate()));return d}
 function renderTools(){
