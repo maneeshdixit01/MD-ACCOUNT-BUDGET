@@ -76,22 +76,22 @@ jobs:
           npx cap add android
           
           mkdir -p assets
-          # सीधे आपकी अपलोड की गई icon-512.png फाइल का इस्तेमाल करेगा
           if [ -f "icon-512.png" ]; then
             echo "Using icon-512.png for app logo"
             sudo apt-get update && sudo apt-get install -y imagemagick
             convert icon-512.png -resize 1024x1024\! assets/icon-only.png
             cp assets/icon-only.png assets/icon-foreground.png
-            convert -size 1024x1024 xc:white assets/icon-background.png
-            convert icon-512.png -gravity center -background white -extent 2732x2732 assets/splash.png
+            # सफेद किनारे की समस्या को हटाने के लिए लोगो के रंग से मिलता-जुलता डार्क ग्रीन बैकग्राउंड सेट किया गया है
+            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
+            convert icon-512.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
             npx capacitor-assets generate --android
           elif [ -f "icon-192.png" ]; then
             echo "Using icon-192.png for app logo"
             sudo apt-get update && sudo apt-get install -y imagemagick
             convert icon-192.png -resize 1024x1024\! assets/icon-only.png
             cp assets/icon-only.png assets/icon-foreground.png
-            convert -size 1024x1024 xc:white assets/icon-background.png
-            convert icon-192.png -gravity center -background white -extent 2732x2732 assets/splash.png
+            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
+            convert icon-192.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
             npx capacitor-assets generate --android
           fi
 
@@ -125,7 +125,7 @@ jobs:
       - name: Upload Signed AAB, APK & Keystore
         uses: actions/upload-artifact@v4
         with:
-          name: MD-Accounts-Logo-Release
+          name: MD-Accounts-Logo-Perfect-Release
           path: |
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/release/*.apk
