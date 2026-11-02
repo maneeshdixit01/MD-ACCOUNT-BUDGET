@@ -1,7 +1,6 @@
 {
   "appId": "com.md.accountbudget",
-  "appName": "MD Account & Budget Management",
-  "webDir": ".",
+  "appName": "MD Accounts",
+  "webDir": "www",
   "bundledWebRuntime": false
 }
-```[cite: 1]
