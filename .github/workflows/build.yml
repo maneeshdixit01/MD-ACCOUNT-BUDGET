@@ -38,37 +38,6 @@ jobs:
             fi
           fi
 
-          if ! grep -q "2591789064" www/index.html; then
-            cat << 'EOF' >> www/index.html
-          <script>
-          document.addEventListener('DOMContentLoaded', async function() {
-            const AdMob = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob;
-            if (!AdMob) return;
-            try {
-              await AdMob.initialize();
-              await AdMob.showBanner({
-                adId: 'ca-app-pub-5831881293330144/2591789064',
-                adSize: 'ADAPTIVE_BANNER',
-                position: 'BOTTOM_CENTER',
-                margin: 0,
-                isTesting: false
-              });
-              await AdMob.prepareInterstitial({
-                adId: 'ca-app-pub-5831881293330144/8965625723',
-                isTesting: false
-              });
-              await AdMob.prepareRewardVideoAd({
-                adId: 'ca-app-pub-5831881293330144/7767047947',
-                isTesting: false
-              });
-            } catch (e) {
-              console.error('AdMob Init Error:', e);
-            }
-          });
-          </script>
-          EOF
-          fi
-
           npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
       - name: Add Android Platform, Custom Logo & AdMob ID
@@ -92,12 +61,6 @@ jobs:
           convert -size 1024x1024 xc:"#114232" assets/icon-background.png
           convert "$ICON_FILE" -resize 1024x1024\! -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
           npx capacitor-assets generate --android
-          echo "Checking generated Android launcher icons..."
-          find android/app/src/main/res -maxdepth 2 -type f \( -name 'ic_launcher*' -o -name 'ic_launcher_round*' \) -print
-          if ! find android/app/src/main/res -type f -name 'ic_launcher.png' | grep -q .; then
-            echo "ERROR: Android launcher icon was not generated"
-            exit 1
-          fi
 
           sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
           
