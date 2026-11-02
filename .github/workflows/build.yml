@@ -26,7 +26,7 @@ jobs:
         run: |
           rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www assets
           npm init -y
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/filesystem@6 @capacitor/share@6 @capacitor/assets
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/assets esbuild
           mkdir -p www
           find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
           if [ ! -f www/index.html ]; then
@@ -38,6 +38,7 @@ jobs:
             fi
           fi
 
+
           npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
       - name: Add Android Platform, Custom Logo & AdMob ID
@@ -46,21 +47,23 @@ jobs:
           
           mkdir -p assets
           if [ -f "icon-512.png" ]; then
-            ICON_FILE="icon-512.png"
+            echo "Using icon-512.png for app logo"
+            sudo apt-get update && sudo apt-get install -y imagemagick
+            convert icon-512.png -resize 1024x1024\! assets/icon-only.png
+            cp assets/icon-only.png assets/icon-foreground.png
+            # सफेद किनारे की समस्या को हटाने के लिए लोगो के रंग से मिलता-जुलता डार्क ग्रीन बैकग्राउंड सेट किया गया है
+            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
+            convert icon-512.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
+            npx capacitor-assets generate --android
           elif [ -f "icon-192.png" ]; then
-            ICON_FILE="icon-192.png"
-          else
-            echo "ERROR: icon-512.png or icon-192.png not found in repository root"
-            exit 1
+            echo "Using icon-192.png for app logo"
+            sudo apt-get update && sudo apt-get install -y imagemagick
+            convert icon-192.png -resize 1024x1024\! assets/icon-only.png
+            cp assets/icon-only.png assets/icon-foreground.png
+            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
+            convert icon-192.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
+            npx capacitor-assets generate --android
           fi
-          echo "Generating Android launcher icons from $ICON_FILE"
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          convert "$ICON_FILE" -resize 1024x1024\! assets/icon-only.png
-          cp assets/icon-only.png assets/icon-foreground.png
-          convert -size 1024x1024 xc:"#114232" assets/icon-background.png
-          convert "$ICON_FILE" -resize 1024x1024\! -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
-          npx capacitor-assets generate --android
 
           sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
           
