@@ -1543,19 +1543,28 @@ function deleteTxn(i){
   db.txns=db.txns.filter(y=>y.id!==i);save();
 }
 
-function exportData() {
+async function exportData() {
+    let fileURL = null;
     try {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", "MD_Accounts_Backup_" + new Date().toISOString().slice(0,10) + ".json");
+        const backupData = JSON.stringify(db, null, 2);
+        const fileName = "MD_Accounts_Backup_" + new Date().toISOString().slice(0, 10) + ".json";
+        const blob = new Blob([backupData], { type: "application/json;charset=utf-8" });
+        fileURL = URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement("a");
+        downloadAnchor.href = fileURL;
+        downloadAnchor.download = fileName;
+        downloadAnchor.style.display = "none";
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
         downloadAnchor.remove();
-    } catch (e) {
-        alert("बैकअप डाउनलोड करने में त्रुटि: " + e.message);
+        setTimeout(() => { if (fileURL) URL.revokeObjectURL(fileURL); }, 10000);
+    } catch (error) {
+        if (fileURL) URL.revokeObjectURL(fileURL);
+        console.error("Backup Error:", error);
+        alert("JSON बैकअप डाउनलोड नहीं हो पाया: " + (error.message || error));
     }
 }
+
 function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.accounts)||!Array.isArray(d.txns))throw Error();d.accounts=d.accounts.map(a=>({rate:0,limit:0,available:0,emi:0,weight:0,...a}));d.txns=d.txns.map(t=>({...t,changes:Array.isArray(t.changes)?t.changes:[]}));if(confirm(t('load_backup_confirm'))){db=d;save();alert(t('backup_loaded'))}}catch(err){alert(t('invalid_backup'))}e.target.value=''};r.readAsText(f)}
 function nextDate(day){if(!day)return null;let now=new Date(),d=new Date(now.getFullYear(),now.getMonth(),Math.min(day,new Date(now.getFullYear(),now.getMonth()+1,0).getDate()));if(d<new Date(now.getFullYear(),now.getMonth(),now.getDate()))d=new Date(now.getFullYear(),now.getMonth()+1,Math.min(day,new Date(now.getFullYear(),now.getMonth()+2,0).getDate()));return d}
 function renderTools(){
@@ -1824,9 +1833,9 @@ window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')
 <script>
 (function(){
   const ADMOB_APP_ID = 'ca-app-pub-5831881293330144~2578300444';
-  const ADMOB_BANNER_ID = 'ca-app-pub-5831881293330144/2591789064';
-  const ADMOB_INTERSTITIAL_ID = 'ca-app-pub-5831881293330144/8965625723';
-  const ADMOB_REWARDED_ID = 'ca-app-pub-5831881293330144/7767047947';
+  const ADMOB_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111';
+  const ADMOB_INTERSTITIAL_ID = 'ca-app-pub-3940256099942544/1033173712';
+  const ADMOB_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917';
 
   let AdMobPlugin = null;
   let interstitialReady = false;
@@ -1917,8 +1926,12 @@ window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')
       };
     }
 
-    // Backup must remain available even if ads are unavailable.
-    // Keep exportData() direct; no rewarded-ad gate for user data backup.
+    const origExport = window.exportData;
+    if (typeof origExport === 'function') {
+      window.exportData = function() {
+        window.showAppRewardAd(() => { origExport(); });
+      };
+    }
   });
 })();
 </script>
