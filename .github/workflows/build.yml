@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # 2. Setup Node.js
+      # 2. Setup Node
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
@@ -70,17 +70,17 @@ jobs:
           if [ -f icon-512.png ]; then
             npm exec capacitor-assets generate -- --android
           else
-            echo "icon-512.png not found; using default icons"
+            echo "icon-512.png not found"
           fi
 
       # 6. Add AdMob App ID
-      - name: Add AdMob App ID to Android Manifest
+      - name: Add AdMob App ID
         shell: bash
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
 
           if [ ! -f "$MANIFEST" ]; then
-            echo "ERROR: Android Manifest not found"
+            echo "ERROR: Android Manifest missing"
             exit 1
           fi
 
@@ -89,8 +89,8 @@ jobs:
           </application>|' "$MANIFEST"
           fi
 
-      # 7. Decode Signing Key
-      - name: Decode release keystore from GitHub Secret
+      # 7. Decode Keystore
+      - name: Decode release keystore
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -127,7 +127,6 @@ jobs:
           fi
 
           cd android
-
           chmod +x gradlew
 
           ./gradlew bundleRelease assembleRelease \
