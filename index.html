@@ -1544,27 +1544,44 @@ function deleteTxn(i){
 }
 
 async function exportData() {
-    let fileURL = null;
-    try {
-        const backupData = JSON.stringify(db, null, 2);
-        const fileName = "MD_Accounts_Backup_" + new Date().toISOString().slice(0, 10) + ".json";
-        const blob = new Blob([backupData], { type: "application/json;charset=utf-8" });
-        fileURL = URL.createObjectURL(blob);
-        const downloadAnchor = document.createElement("a");
-        downloadAnchor.href = fileURL;
-        downloadAnchor.download = fileName;
-        downloadAnchor.style.display = "none";
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
-        setTimeout(() => { if (fileURL) URL.revokeObjectURL(fileURL); }, 10000);
-    } catch (error) {
-        if (fileURL) URL.revokeObjectURL(fileURL);
-        console.error("Backup Error:", error);
-        alert("JSON बैकअप डाउनलोड नहीं हो पाया: " + (error.message || error));
+  const fileName = "MD_Accounts_Backup_" + new Date().toISOString().slice(0,10) + ".json";
+  const jsonData = JSON.stringify(db, null, 2);
+  try {
+    // Android Capacitor: write the JSON file natively, then open the share/save sheet.
+    const plugins = window.Capacitor && window.Capacitor.Plugins;
+    const Filesystem = plugins && plugins.Filesystem;
+    const Share = plugins && plugins.Share;
+    if (Filesystem && Share) {
+      const saved = await Filesystem.writeFile({
+        path: fileName,
+        data: jsonData,
+        directory: 'CACHE',
+        encoding: 'utf8'
+      });
+      const fileUri = saved.uri || (await Filesystem.getUri({path:fileName, directory:'CACHE'})).uri;
+      await Share.share({
+        title: 'MD Accounts JSON Backup',
+        text: 'अपनी JSON बैकअप फाइल सुरक्षित जगह पर Save करें।',
+        files: [fileUri],
+        dialogTitle: 'JSON Backup Save करें'
+      });
+      return;
     }
+    // Browser fallback
+    const blob = new Blob([jsonData], {type:'application/json;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  } catch (e) {
+    console.error('JSON backup export failed:', e);
+    alert('बैकअप फाइल तैयार/सेव नहीं हो सकी: ' + (e && e.message ? e.message : e));
+  }
 }
-
 function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.accounts)||!Array.isArray(d.txns))throw Error();d.accounts=d.accounts.map(a=>({rate:0,limit:0,available:0,emi:0,weight:0,...a}));d.txns=d.txns.map(t=>({...t,changes:Array.isArray(t.changes)?t.changes:[]}));if(confirm(t('load_backup_confirm'))){db=d;save();alert(t('backup_loaded'))}}catch(err){alert(t('invalid_backup'))}e.target.value=''};r.readAsText(f)}
 function nextDate(day){if(!day)return null;let now=new Date(),d=new Date(now.getFullYear(),now.getMonth(),Math.min(day,new Date(now.getFullYear(),now.getMonth()+1,0).getDate()));if(d<new Date(now.getFullYear(),now.getMonth(),now.getDate()))d=new Date(now.getFullYear(),now.getMonth()+1,Math.min(day,new Date(now.getFullYear(),now.getMonth()+2,0).getDate()));return d}
 function renderTools(){
@@ -1832,10 +1849,10 @@ window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')
 <!-- Capacitor AdMob Integration (Banner, Interstitial Video & Rewarded Ad) -->
 <script>
 (function(){
-  const ADMOB_APP_ID = 'ca-app-pub-5831881293330144~2578300444';
-  const ADMOB_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111';
-  const ADMOB_INTERSTITIAL_ID = 'ca-app-pub-3940256099942544/1033173712';
-  const ADMOB_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917';
+  const ADMOB_APP_ID = 'ca-app-pub-583188129330144~2578300444';
+  const ADMOB_BANNER_ID = 'ca-app-pub-583188129330144/2991789064';
+  const ADMOB_INTERSTITIAL_ID = 'ca-app-pub-583188129330144/8965625723';
+  const ADMOB_REWARDED_ID = 'ca-app-pub-583188129330144/7767047947';
 
   let AdMobPlugin = null;
   let interstitialReady = false;
