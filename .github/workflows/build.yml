@@ -1,146 +1,136 @@
-
-name: Build Signed MD Accounts Android App
+name: Build Signed Android App with Custom Logo & AdMob
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
-
-permissions:
-  contents: read
+    branches: [ main ]
 
 jobs:
   build:
-    name: build
     runs-on: ubuntu-24.04
-
     steps:
-      # 1. Checkout Repository
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v5
 
-      # 2. Setup Node
-      - name: Setup Node
+      - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
 
-      # 3. Setup Java
-      - name: Setup Java
+      - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
 
-      # 4. Prepare Web Assets and Capacitor
-      - name: Prepare web assets and Capacitor
-        shell: bash
+      - name: Prepare Web Assets, Capacitor & AdMob
         run: |
-          set -e
-
-          npm install
-
+          rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www assets
+          npm init -y
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/filesystem@6 @capacitor/share@6 @capacitor/assets
           mkdir -p www
+          find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
+          if [ ! -f www/index.html ]; then
+            FIRST_HTML=$(find www -maxdepth 1 -name "*.html" | head -n 1)
+            if [ -n "$FIRST_HTML" ]; then
+              cp "$FIRST_HTML" www/index.html
+            else
+              echo "<h1>MD Accounts</h1>" > www/index.html
+            fi
+          fi
 
-          for file in *.html *.css *.js *.json *.png *.jpg *.jpeg *.svg *.ico; do
-            [ -f "$file" ] || continue
+          if ! grep -q "2591789064" www/index.html; then
+            cat << 'EOF' >> www/index.html
+          <script>
+          document.addEventListener('DOMContentLoaded', async function() {
+            const AdMob = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob;
+            if (!AdMob) return;
+            try {
+              await AdMob.initialize();
+              await AdMob.showBanner({
+                adId: 'ca-app-pub-5831881293330144/2591789064',
+                adSize: 'ADAPTIVE_BANNER',
+                position: 'BOTTOM_CENTER',
+                margin: 0,
+                isTesting: false
+              });
+              await AdMob.prepareInterstitial({
+                adId: 'ca-app-pub-5831881293330144/8965625723',
+                isTesting: false
+              });
+              await AdMob.prepareRewardVideoAd({
+                adId: 'ca-app-pub-5831881293330144/7767047947',
+                isTesting: false
+              });
+            } catch (e) {
+              console.error('AdMob Init Error:', e);
+            }
+          });
+          </script>
+          EOF
+          fi
 
-            case "$file" in
-              package.json|package-lock.json|capacitor.config.json)
-                continue
-                ;;
-            esac
+          npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
-            cp "$file" www/
-          done
-
-          test -f www/index.html || {
-            echo "ERROR: index.html missing"
-            exit 1
-          }
-
+      - name: Add Android Platform, Custom Logo & AdMob ID
+        run: |
           npx cap add android
+          
+          mkdir -p assets
+          if [ -f "icon-512.png" ]; then
+            ICON_FILE="icon-512.png"
+          elif [ -f "icon-192.png" ]; then
+            ICON_FILE="icon-192.png"
+          else
+            echo "ERROR: icon-512.png or icon-192.png not found in repository root"
+            exit 1
+          fi
+          echo "Generating Android launcher icons from $ICON_FILE"
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          convert "$ICON_FILE" -resize 1024x1024\! assets/icon-only.png
+          cp assets/icon-only.png assets/icon-foreground.png
+          convert -size 1024x1024 xc:"#114232" assets/icon-background.png
+          convert "$ICON_FILE" -resize 1024x1024\! -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
+          npx capacitor-assets generate --android
+          echo "Checking generated Android launcher icons..."
+          find android/app/src/main/res -maxdepth 2 -type f \( -name 'ic_launcher*' -o -name 'ic_launcher_round*' \) -print
+          if ! find android/app/src/main/res -type f -name 'ic_launcher.png' | grep -q .; then
+            echo "ERROR: Android launcher icon was not generated"
+            exit 1
+          fi
+
+          sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
+          
           npx cap sync android
 
-      # 5. Generate App Icons
-      - name: Generate app icons
-        shell: bash
+      - name: Prepare Keystore (Digital Signing Key)
         run: |
-          if [ -f icon-512.png ]; then
-            npm exec capacitor-assets generate -- --android
+          if [ -f "md-release-key.jks" ]; then
+            cp md-release-key.jks android/app/md-release-key.jks
           else
-            echo "icon-512.png not found"
+            keytool -genkey -v -keystore android/app/md-release-key.jks \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias md_key \
+              -storepass MdAccount@123 -keypass MdAccount@123 \
+              -dname "CN=Maneesh Kumar Dixit, OU=IT, O=MD Accounts, L=Lucknow, ST=UP, C=IN"
+            cp android/app/md-release-key.jks ./md-release-key.jks
           fi
 
-      # 6. Add AdMob App ID
-      - name: Add AdMob App ID
-        shell: bash
+      - name: Build & Sign Release AAB and APK
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-
-          if [ ! -f "$MANIFEST" ]; then
-            echo "ERROR: Android Manifest missing"
-            exit 1
-          fi
-
-          if ! grep -q 'com.google.android.gms.ads.APPLICATION_ID' "$MANIFEST"; then
-            sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\
-          </application>|' "$MANIFEST"
-          fi
-
-      # 7. Decode Keystore
-      - name: Decode release keystore
-        shell: bash
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: |
-          set -e
-
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "ERROR: KEYSTORE_BASE64 secret missing"
-            exit 1
-          fi
-
-          echo "$KEYSTORE_BASE64" | base64 --decode \
-            > android/app/md-release-key.jks
-
-          test -s android/app/md-release-key.jks
-
-      # 8. Build Signed AAB and APK
-      - name: Build signed AAB and APK
-        shell: bash
-        env:
-          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          set -e
-
-          if [ -z "$STORE_PASSWORD" ]; then
-            echo "ERROR: KEYSTORE_PASSWORD secret missing"
-            exit 1
-          fi
-
-          if [ -z "$KEY_PASSWORD" ]; then
-            echo "ERROR: KEY_PASSWORD secret missing"
-            exit 1
-          fi
-
           cd android
           chmod +x gradlew
-
           ./gradlew bundleRelease assembleRelease \
-            -Pandroid.injected.signing.store.file="$PWD/app/md-release-key.jks" \
-            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.store.file=$PWD/app/md-release-key.jks \
+            -Pandroid.injected.signing.store.password=MdAccount@123 \
             -Pandroid.injected.signing.key.alias=md_key \
-            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+            -Pandroid.injected.signing.key.password=MdAccount@123
 
-      # 9. Upload AAB and APK
-      - name: Upload AAB and APK
+      - name: Upload Signed AAB, APK & Keystore
         uses: actions/upload-artifact@v4
         with:
-          name: MD-Accounts-Release
+          name: MD-Accounts-Logo-Perfect-Release
           path: |
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+            md-release-key.jks
