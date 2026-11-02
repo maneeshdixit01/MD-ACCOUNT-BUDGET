@@ -1,132 +1,75 @@
-name: Build Signed Android App with Custom Logo & AdMob
+name: Build Signed MD Accounts Android App
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 22
 
-      - name: Set up JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Prepare Web Assets, Capacitor & AdMob
+      - name: Prepare web assets and Capacitor
         run: |
-          rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www assets
-          npm init -y
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/assets
+          npm install
           mkdir -p www
-          find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
-          if [ ! -f www/index.html ]; then
-            FIRST_HTML=$(find www -maxdepth 1 -name "*.html" | head -n 1)
-            if [ -n "$FIRST_HTML" ]; then
-              cp "$FIRST_HTML" www/index.html
-            else
-              echo "<h1>MD Accounts</h1>" > www/index.html
-            fi
-          fi
-
-          if ! grep -q "2591789064" www/index.html; then
-            cat << 'EOF' >> www/index.html
-          <script>
-          document.addEventListener('DOMContentLoaded', async function() {
-            const AdMob = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob;
-            if (!AdMob) return;
-            try {
-              await AdMob.initialize();
-              await AdMob.showBanner({
-                adId: 'ca-app-pub-5831881293330144/2591789064',
-                adSize: 'ADAPTIVE_BANNER',
-                position: 'BOTTOM_CENTER',
-                margin: 0,
-                isTesting: false
-              });
-              await AdMob.prepareInterstitial({
-                adId: 'ca-app-pub-5831881293330144/8965625723',
-                isTesting: false
-              });
-              await AdMob.prepareRewardVideoAd({
-                adId: 'ca-app-pub-5831881293330144/7767047947',
-                isTesting: false
-              });
-            } catch (e) {
-              console.error('AdMob Init Error:', e);
-            }
-          });
-          </script>
-          EOF
-          fi
-
-          npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
-
-      - name: Add Android Platform, Custom Logo & AdMob ID
-        run: |
-          npx cap add android
-          
-          mkdir -p assets
-          if [ -f "icon-512.png" ]; then
-            echo "Using icon-512.png for app logo"
-            sudo apt-get update && sudo apt-get install -y imagemagick
-            convert icon-512.png -resize 1024x1024\! assets/icon-only.png
-            cp assets/icon-only.png assets/icon-foreground.png
-            # सफेद किनारे की समस्या को हटाने के लिए लोगो के रंग से मिलता-जुलता डार्क ग्रीन बैकग्राउंड सेट किया गया है
-            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
-            convert icon-512.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
-            npx capacitor-assets generate --android
-          elif [ -f "icon-192.png" ]; then
-            echo "Using icon-192.png for app logo"
-            sudo apt-get update && sudo apt-get install -y imagemagick
-            convert icon-192.png -resize 1024x1024\! assets/icon-only.png
-            cp assets/icon-only.png assets/icon-foreground.png
-            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
-            convert icon-192.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
-            npx capacitor-assets generate --android
-          fi
-
-          sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
-          
+          find . -maxdepth 1 -type f \\( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \\) \\! -name "package*.json" \\! -name "capacitor.config.json" -exec cp {} www/ \\;
+          test -f www/index.html || { echo "ERROR: index.html missing"; exit 1; }
+          npx cap add android || true
           npx cap sync android
 
-      - name: Prepare Keystore (Digital Signing Key)
+      - name: Generate app icons (if icon-512.png exists)
         run: |
-          if [ -f "md-release-key.jks" ]; then
-            cp md-release-key.jks android/app/md-release-key.jks
-          else
-            keytool -genkey -v -keystore android/app/md-release-key.jks \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -alias md_key \
-              -storepass MdAccount@123 -keypass MdAccount@123 \
-              -dname "CN=Maneesh Kumar Dixit, OU=IT, O=MD Accounts, L=Lucknow, ST=UP, C=IN"
-            cp android/app/md-release-key.jks ./md-release-key.jks
+          if [ -f icon-512.png ]; then
+            npm exec capacitor-assets generate -- --android
           fi
 
-      - name: Build & Sign Release AAB and APK
+      - name: Add AdMob App ID to Android manifest
         run: |
+          grep -q 'com.google.android.gms.ads.APPLICATION_ID' android/app/src/main/AndroidManifest.xml || \\
+          sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\\n    </application>|' android/app/src/main/AndroidManifest.xml
+
+      - name: Decode release keystore from GitHub Secret
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo "Missing KEYSTORE_BASE64 GitHub Secret"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/md-release-key.jks
+          test -s android/app/md-release-key.jks
+
+      - name: Build signed AAB and APK
+        env:
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          test -n "$STORE_PASSWORD" || { echo "Missing KEYSTORE_PASSWORD GitHub Secret"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "Missing KEY_PASSWORD GitHub Secret"; exit 1; }
           cd android
           chmod +x gradlew
-          ./gradlew bundleRelease assembleRelease \
-            -Pandroid.injected.signing.store.file=$PWD/app/md-release-key.jks \
-            -Pandroid.injected.signing.store.password=MdAccount@123 \
-            -Pandroid.injected.signing.key.alias=md_key \
-            -Pandroid.injected.signing.key.password=MdAccount@123
+          ./gradlew bundleRelease assembleRelease \\
+            -Pandroid.injected.signing.store.file="$PWD/app/md-release-key.jks" \\
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \\
+            -Pandroid.injected.signing.key.alias=md_key \\
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
-      - name: Upload Signed AAB, APK & Keystore
+      - name: Upload AAB and APK (never upload keystore)
         uses: actions/upload-artifact@v4
         with:
-          name: MD-Accounts-Logo-Perfect-Release
+          name: MD-Accounts-Release
           path: |
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/release/*.apk
-            md-release-key.jks
