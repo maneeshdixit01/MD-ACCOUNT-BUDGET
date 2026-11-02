@@ -1890,11 +1890,16 @@ window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')
   }
 
   async function preloadRewarded() {
-    if (!AdMobPlugin) return;
+    if (!AdMobPlugin) return false;
     try {
       await AdMobPlugin.prepareRewardVideoAd({ adId: ADMOB_REWARDED_ID });
       rewardedReady = true;
-    } catch (e) { rewardedReady = false; }
+      return true;
+    } catch (e) {
+      rewardedReady = false;
+      console.log('Rewarded ad load failed:', e);
+      return false;
+    }
   }
 
   window.showAppVideoAd = async function() {
@@ -1909,21 +1914,22 @@ window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')
   };
 
   window.showAppRewardAd = async function(onSuccess) {
-    if (!AdMobPlugin) { if(onSuccess) onSuccess(); return; }
+    // If the ad is not ready yet, wait for one load attempt before continuing.
+    if (!AdMobPlugin) { if (onSuccess) onSuccess(); return; }
     try {
+      if (!rewardedReady) await preloadRewarded();
       if (rewardedReady) {
-        const reward = await AdMobPlugin.showRewardVideoAd();
+        await AdMobPlugin.showRewardVideoAd();
         rewardedReady = false;
         setTimeout(preloadRewarded, 2000);
-        if(onSuccess) onSuccess();
-      } else {
-        preloadRewarded();
-        if(onSuccess) onSuccess();
       }
     } catch (e) {
-      preloadRewarded();
-      if(onSuccess) onSuccess();
+      rewardedReady = false;
+      console.log('Rewarded ad show failed:', e);
+      setTimeout(preloadRewarded, 2000);
     }
+    // Do not block backup/download if Google has no ad available.
+    if (onSuccess) onSuccess();
   };
 
   window.addEventListener('DOMContentLoaded', () => {
