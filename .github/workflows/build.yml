@@ -1,3 +1,4 @@
+
 name: Build Signed Android App with Custom Logo & AdMob
 
 on:
@@ -7,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v5
@@ -19,16 +21,21 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
 
       - name: Prepare Web Assets, Capacitor & AdMob
         run: |
           rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www assets
+
           npm init -y
+
           npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/filesystem@6 @capacitor/share@6 @capacitor/assets esbuild
+
           mkdir -p www
+
           find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
+
           if [ ! -f www/index.html ]; then
             FIRST_HTML=$(find www -maxdepth 1 -name "*.html" | head -n 1)
             if [ -n "$FIRST_HTML" ]; then
@@ -38,40 +45,46 @@ jobs:
             fi
           fi
 
-          # Bundle the AdMob plugin entry so index.html can load window.MDAdMob
-          npx esbuild admob-entry.js --bundle --platform=browser --format=iife --outfile=www/admob.bundle.js
+          # Bundle AdMob entry from repository root
+          npx esbuild ./admob-entry.js --bundle --platform=browser --format=iife --outfile=www/admob.bundle.js
 
+          # Initialize Capacitor
           npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
       - name: Add Android Platform, Custom Logo & AdMob ID
         run: |
           npx cap add android
-          
+
           mkdir -p assets
+
           if [ -f "icon-512.png" ]; then
-            echo "Using icon-512.png for app logo"
-            sudo apt-get update && sudo apt-get install -y imagemagick
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+
             convert icon-512.png -resize 1024x1024\! assets/icon-only.png
             cp assets/icon-only.png assets/icon-foreground.png
-            # सफेद किनारे की समस्या को हटाने के लिए लोगो के रंग से मिलता-जुलता डार्क ग्रीन बैकग्राउंड सेट किया गया है
             convert -size 1024x1024 xc:"#114232" assets/icon-background.png
             convert icon-512.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
+
             npx capacitor-assets generate --android
+
           elif [ -f "icon-192.png" ]; then
-            echo "Using icon-192.png for app logo"
-            sudo apt-get update && sudo apt-get install -y imagemagick
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+
             convert icon-192.png -resize 1024x1024\! assets/icon-only.png
             cp assets/icon-only.png assets/icon-foreground.png
             convert -size 1024x1024 xc:"#114232" assets/icon-background.png
             convert icon-192.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
+
             npx capacitor-assets generate --android
           fi
 
           sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
-          
+
           npx cap sync android
 
-      - name: Prepare Keystore (Digital Signing Key)
+      - name: Prepare Keystore
         run: |
           if [ -f "md-release-key.jks" ]; then
             cp md-release-key.jks android/app/md-release-key.jks
@@ -80,7 +93,8 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -alias md_key \
               -storepass MdAccount@123 -keypass MdAccount@123 \
-              -dname "CN=Maneesh Kumar Dixit, OU=IT, O=MD Accounts, L=Lucknow, ST=UP, C=IN"
+              -dname "CN=MD Accounts, OU=IT, O=MD Accounts, L=Lucknow, ST=UP, C=IN"
+
             cp android/app/md-release-key.jks ./md-release-key.jks
           fi
 
@@ -88,6 +102,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
+
           ./gradlew bundleRelease assembleRelease \
             -Pandroid.injected.signing.store.file=$PWD/app/md-release-key.jks \
             -Pandroid.injected.signing.store.password=MdAccount@123 \
