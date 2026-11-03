@@ -26,7 +26,7 @@ jobs:
         run: |
           rm -rf package.json package-lock.json node_modules android capacitor.config.json capacitor.config.ts www assets
           npm init -y
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/assets esbuild
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/admob@6 @capacitor/filesystem@6 @capacitor/share@6 @capacitor/assets esbuild
           mkdir -p www
           find . -maxdepth 1 -type f \( -name "*.html" -o -name "*.css" -o -name "*.js" -o -name "*.json" -o -name "*.png" -o -name "*.jpg" -o -name "*.svg" -o -name "*.ico" \) ! -name "package*.json" ! -name "capacitor.config.json" ! -name "tsconfig.json" -exec cp {} www/ \;
           if [ ! -f www/index.html ]; then
