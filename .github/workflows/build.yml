@@ -38,6 +38,8 @@ jobs:
             fi
           fi
 
+          # Bundle the AdMob plugin entry so index.html can load window.MDAdMob
+          npx esbuild admob-entry.js --bundle --platform=browser --format=iife --outfile=www/admob.bundle.js
 
           npx cap init "MD Accounts" "com.md.accountbudget" --web-dir www
 
