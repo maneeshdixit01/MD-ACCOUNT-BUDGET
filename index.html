@@ -1847,6 +1847,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')||$('graph')?.classList.contains('active'))requestAnimationFrame(renderGraph)});
 </script>
 
+<script src="admob.bundle.js"></script>
 <!-- Capacitor AdMob Integration (Banner, Interstitial Video & Rewarded Ad) -->
 <script>
 (function(){
@@ -1860,9 +1861,11 @@ window.addEventListener('resize',()=>{if($('home')?.classList.contains('active')
   let rewardedReady = false;
 
   async function initAdMob() {
-    const cap = window.Capacitor;
-    if (!cap || !cap.Plugins || !cap.Plugins.AdMob) return;
-    AdMobPlugin = cap.Plugins.AdMob;
+    AdMobPlugin = window.MDAdMob;
+    if (!AdMobPlugin) {
+      console.error('AdMob bundle/plugin not loaded (window.MDAdMob missing)');
+      return;
+    }
 
     try {
       await AdMobPlugin.initialize({ initializeForTesting: false });
