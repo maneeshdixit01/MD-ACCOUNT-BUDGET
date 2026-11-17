@@ -48,7 +48,8 @@ input:focus,select:focus{outline:2px solid #9ed4c5;border-color:var(--green)}
 .hidden{display:none!important}
 .foot{font-size:11px;color:var(--muted);text-align:center;margin-top:20px}
 .filterrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
-.chartwrap{width:100%;overflow:hidden;background:#fafcfb;border-radius:14px;padding:10px;box-shadow:inset 0 2px 6px #00000005}
+.chartwrap{width:100%;overflow:hidden;background:#fafcfb;border-radius:14px;padding:10px;box-shadow:inset 0 2px 6px #00000005;position:relative}
+.chart-bubble{position:absolute;z-index:8;display:none;max-width:190px;background:#142c27;color:#fff;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:750;line-height:1.45;box-shadow:0 5px 18px #0003;pointer-events:none;white-space:normal;text-align:center}.chart-bubble.show{display:block}.chart-bubble:after{content:"";position:absolute;bottom:-5px;left:50%;width:10px;height:10px;background:#142c27;transform:translateX(-50%) rotate(45deg)}
 canvas{width:100%;height:240px;display:block;image-rendering:auto}
 .filelabel{display:inline-block}.dangertext{color:var(--red)}
 body.privacy .moneyval,body.privacy .metric strong,body.privacy .amount,body.privacy .private-number{filter:blur(7px);user-select:none}
@@ -148,6 +149,24 @@ body.privacy .moneyval,body.privacy .metric strong,body.privacy .amount,body.pri
 .quick-btn:active{transform:scale(.97)}
 .quick-btn.income{color:#0d6b43;background:#f0fdf4;border-color:#b6e8cc}
 .quick-btn.expense{color:#9f1239;background:#fff1f2;border-color:#fecdd3}
+.dashboard-actions{grid-template-columns:1fr 1fr}
+.quick-entry{color:#155eaa;background:#eff6ff;border-color:#bfdbfe}
+.month-saving{cursor:pointer;color:#166534;background:#f0fdf4;border-color:#bbf7d0;justify-content:flex-start;flex-wrap:wrap;text-align:left}
+.month-saving .saving-copy{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.month-saving small{font-size:11px;font-weight:700;line-height:1.3}
+.month-saving strong{font-size:18px;font-weight:900}
+.month-saving.negative{color:#b91c1c;background:#fef2f2;border-color:#fecaca}
+@media(max-width:420px){.dashboard-actions{grid-template-columns:1fr 1fr}.month-saving strong{font-size:16px}.month-saving small{font-size:10px}}
+
+#monthSavingDetail{margin-top:12px}
+.saving-detail-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.saving-day-row{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px}
+.saving-day-row .saving-day-date{font-weight:700}
+.saving-day-row .saving-day-income,.saving-day-row .saving-day-expense{color:var(--muted,#64748b)}
+.saving-day-row .saving-day-net{font-weight:800;text-align:right;min-width:76px}.saving-day-row .saving-day-running{font-weight:800;text-align:right;min-width:82px;border-left:1px solid var(--border,#e5e7eb);padding-left:7px}
+.saving-day-row .positive{color:#15803d}.saving-day-row .negative{color:#b91c1c}
+.saving-total-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:12px;margin-top:6px;font-weight:900;border-top:2px solid var(--border,#d1d5db)}
+.saving-total-row .positive{color:#15803d}.saving-total-row .negative{color:#b91c1c}
 </style>
 </head><body>
 
@@ -192,9 +211,11 @@ body.privacy .moneyval,body.privacy .metric strong,body.privacy .amount,body.pri
 
 <section id="home" class="page active">
   <div id="homeDashboardContent">
-    <div class="quick-actions">
-      <button class="quick-btn expense" onclick="navigateTo('entry'); entryPreset('expense',document.querySelector('.subtile'));"><span>🛒</span><span data-i18n="quick_exp">तेज़ी से खर्च जोड़ें</span></button>
-      <button class="quick-btn income" onclick="navigateTo('entry'); entryPreset('bankdeposit',document.querySelector('.subtile'));"><span>💰</span><span data-i18n="quick_inc">तेज़ी से आय जोड़ें</span></button>
+    <div class="quick-actions dashboard-actions">
+      <button class="quick-btn quick-entry" onclick="navigateTo('entry');"><span>⚡</span><span data-i18n="quick_entry">क्विक एंट्री</span></button>
+      <button type="button" class="quick-btn month-saving" id="monthSavingTile" onclick="showMonthSavingDetail()" aria-live="polite">
+        <span>💹</span><span class="saving-copy"><small data-i18n="month_saving">महीने में अब तक की बचत</small><strong id="monthSavingValue">₹0</strong></span>
+      </button>
     </div>
     <div class="grid" id="homeMetrics"></div>
     <div id="homeNetWorth"></div>
@@ -203,6 +224,7 @@ body.privacy .moneyval,body.privacy .metric strong,body.privacy .amount,body.pri
     </div>
   </div>
   <div id="metricDetail" class="card hidden" aria-live="polite"></div>
+  <div id="monthSavingDetail" class="card hidden" aria-live="polite"></div>
 </section>
 
 <section id="accounts" class="page"><h2 class="section-title" data-i18n="accounts">खाते</h2>
@@ -375,6 +397,11 @@ body.privacy .moneyval,body.privacy .metric strong,body.privacy .amount,body.pri
   <button class="btn" style="margin-top:10px" onclick="saveSavingsSettings()" data-i18n="save_target">लक्ष्य सेव करें</button>
 </div>
 <div class="card" id="dailySavingsAlert" aria-live="polite"></div>
+<div class="card" id="dailyAverageCard">
+  <div class="field"><label data-i18n="daily_avg_period">दैनिक औसत की अवधि</label><select id="dailyAvgPeriod" onchange="renderDailyAverages()"><option value="1" data-i18n="one_month">1 महीना</option><option value="2" data-i18n="two_months">2 महीने</option><option value="3" data-i18n="three_months">3 महीने</option><option value="6" selected data-i18n="six_months">6 महीने</option></select></div>
+  <div class="grid" id="dailyAverageMetrics" style="margin-top:12px"></div>
+  <div class="hint" style="margin-top:8px">आय/व्यय का औसत चुनी गई अवधि के कैलेंडर दिनों और आज की तारीख तक के आधार पर निकाला गया है।</div>
+</div>
 <div class="card">
   <strong data-i18n="last_6m_savings">पिछले 6 महीने की मासिक बचत</strong>
   <div class="chartwrap"><canvas id="savingsChart" width="700" height="260"></canvas></div>
@@ -496,8 +523,8 @@ const dict = {
   charts_alerts: {hi:"चार्ट एंड अलर्ट", en:"Charts & Alerts"},
   tools: {hi:"अन्य सुविधाएँ", en:"Other Tools"},
   profile: {hi:"मेरी प्रोफाइल", en:"My Profile"},
-  quick_exp: {hi:"तेज़ी से खर्च जोड़ें", en:"Quick Add Expense"},
-  quick_inc: {hi:"तेज़ी से आय जोड़ें", en:"Quick Add Income"},
+  quick_entry: {hi:"क्विक एंट्री", en:"Quick Entry"},
+  month_saving: {hi:"महीने में अब तक की बचत", en:"Savings so far this month"},
   privacy_msg: {hi:"आपका समस्त डेटा आपके फोन में सुरक्षित है, इसलिए कृपया नियमित बैकअप लेते रहें।", en:"All your data is safe on your phone, so please take regular backups."},
   bank_cash: {hi:"बैंक + नकद", en:"Bank + Cash"},
   bank_cash_desc: {hi:"बैंक खाते और उपलब्ध नकद", en:"Bank accounts & available cash"},
@@ -613,7 +640,7 @@ const dict = {
   cr_pay_from: {hi:"CR (क्रेडिट) — भुगतान कहाँ से कर रहे हैं?", en:"CR (Credit) — Where are you paying from?"},
   sel_card_loan: {hi:"कार्ड / बैंक लोन / पारिवारिक लोन चुनें", en:"Select Card / Bank Loan / Family Loan"},
   sel_bank_cash: {hi:"बैंक / नकद चुनें", en:"Select Bank / Cash"},
-  hint_pay: {hi:"कार्ड बिल या लोन किस्त जमा करने पर खर्च नहीं गिना जाएगा।", en:"Paying card bill or loan EMI is not counted as expense."},
+  hint_pay: {hi:"क्रेडिट कार्ड बिल खर्च नहीं गिना जाएगा; बैंक लोन की EMI खर्च में गिनी जाएगी।", en:"Credit-card bill payments are excluded; bank-loan EMIs count as expenses."},
   dr_exp_cat: {hi:"DR (डेबिट) — किस मद पर खर्च किया?", en:"DR (Debit) — Which category was spent on?"},
   cr_pay_mode: {hi:"CR (क्रेडिट) — भुगतान किस माध्यम से किया?", en:"CR (Credit) — Payment method?"},
   sel_exp_cat: {hi:"खर्च की मद चुनें", en:"Select expense category"},
@@ -862,6 +889,9 @@ const dict = {
   chart_income: {hi:"आय", en:"Income"},
   chart_expense: {hi:"खर्च", en:"Expense"},
   chart_networth: {hi:"नेटवर्थ", en:"Net Worth"},
+  daily_avg_period:{hi:"दैनिक औसत की अवधि",en:"Daily average period"},
+  one_month:{hi:"1 महीना",en:"1 month"},two_months:{hi:"2 महीने",en:"2 months"},three_months:{hi:"3 महीने",en:"3 months"},six_months:{hi:"6 महीने",en:"6 months"},
+  total_income:{hi:"कुल आय",en:"Total income"},months:{hi:"माह",en:"months"},daily_avg_income:{hi:"दैनिक औसत आय",en:"Average daily income"},daily_avg_expense:{hi:"दैनिक औसत व्यय",en:"Average daily expense"},daily_avg_savings_loss:{hi:"दैनिक औसत बचत / घाटा",en:"Average daily saving / loss"},
   no_expense_period: {hi:"इस अवधि में खर्च दर्ज नहीं है", en:"No expense recorded in this period"},
   no_expense_month: {hi:"इस माह कोई खर्च नहीं।", en:"No expense this month."},
   other_cat: {hi:"अन्य", en:"Other"},
@@ -1205,7 +1235,52 @@ function monthKey(d){return d.slice(0,7)}
 function monthLabel(k){return new Date(k+'-01T12:00:00').toLocaleDateString(currentLang==='hi'?'hi-IN':'en-IN',{month:'short',year:'2-digit'})}
 function lastMonths(){let a=[],d=new Date();d.setDate(1);for(let i=5;i>=0;i--){let x=new Date(d.getFullYear(),d.getMonth()-i,1);a.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'))}return a}
 function monthIncome(m){return db.txns.filter(x=>monthKey(x.date)===m&&x.isIncome).reduce((s,x)=>s+x.amount,0)}
-function monthExpenses(m){return db.txns.filter(x=>monthKey(x.date)===m&&x.type==='expense').reduce((s,x)=>s+x.amount,0)}
+function isExpenseTxn(x){
+  if(x.type==='expense')return true;
+  // A "pay" transaction linked to a bank-loan account is an EMI.
+  // Credit-card bill payments are deliberately not expenses.
+  return x.type==='pay'&&acct(x.accountId)?.type==='loan';
+}
+function monthExpenses(m){return db.txns.filter(x=>monthKey(x.date)===m&&isExpenseTxn(x)).reduce((s,x)=>s+(Number(x.amount)||0),0)}
+
+function monthToDateSaving(){
+  const now=new Date(), month=today().slice(0,7), day=now.getDate();
+  const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const income=db.txns.filter(x=>monthKey(x.date)===month&&x.isIncome&&x.date<=today())
+    .reduce((s,x)=>s+(Number(x.amount)||0),0);
+  const expense=db.txns.filter(x=>monthKey(x.date)===month&&x.date<=today()&&isExpenseTxn(x))
+    .reduce((s,x)=>s+(Number(x.amount)||0),0);
+  const dailyIncome=income/daysInMonth;
+  const dailyExpense=expense/day;
+  return {value:(dailyIncome-dailyExpense)*day,dailyIncome,dailyExpense,income,expense,day,daysInMonth};
+}
+function showMonthSavingDetail(){
+  const box=$('monthSavingDetail');
+  if(!box)return;
+  const now=new Date(), month=today().slice(0,7), day=now.getDate();
+  const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const txns=db.txns.filter(x=>monthKey(x.date)===month&&x.date<=today());
+  const income=txns.filter(x=>x.isIncome).reduce((s,x)=>s+(Number(x.amount)||0),0);
+  const dailyIncome=income/daysInMonth;
+  let total=0, rows='';
+  for(let d=1;d<=day;d++){
+    const date=month+'-'+String(d).padStart(2,'0');
+    const dayIncome=txns.filter(x=>x.date===date&&x.isIncome).reduce((s,x)=>s+(Number(x.amount)||0),0);
+    const dayExpense=txns.filter(x=>x.date===date&&isExpenseTxn(x)).reduce((s,x)=>s+(Number(x.amount)||0),0);
+    const net=dailyIncome-dayExpense; total+=net;
+    const cls=net<0?'negative':'positive', sign=net>0?'+':'';
+    const runningCls=total<0?'negative':'positive', runningSign=total>0?'+':'';
+    rows+=`<div class="saving-day-row"><span class="saving-day-date">${d} ${new Date(date+'T12:00:00').toLocaleDateString(currentLang==='hi'?'hi-IN':'en-IN',{month:'short'})}</span><span class="saving-day-income">आय ${money(dailyIncome)}</span><span class="saving-day-expense">खर्च ${money(dayExpense)}</span><strong class="saving-day-net ${cls}">${sign}${money(net)}</strong><strong class="saving-day-running ${runningCls}" title="इस तारीख तक कुल">कुल ${runningSign}${money(total)}</strong></div>`;
+  }
+  const totalCls=total<0?'negative':'positive', totalSign=total>0?'+':'';
+  box.innerHTML=`<div class="saving-detail-head"><strong>महीने में अब तक की बचत — तारीखवार</strong><button class="btn secondary" type="button" onclick="hideMonthSavingDetail()">बंद करें ✕</button></div>
+  <div class="hint">दैनिक औसत आय: ${money(dailyIncome)} · दिन का परिणाम = दैनिक औसत आय − उस दिन का खर्च · कुल = उस तारीख तक जमा बचत/घाटा</div>
+  ${rows}
+  <div class="saving-total-row"><span>कुल अनुमानित बचत / घाटा</span><strong class="${totalCls}">${totalSign}${money(total)}</strong></div>`;
+  box.classList.remove('hidden');
+  box.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function hideMonthSavingDetail(){ $('monthSavingDetail')?.classList.add('hidden'); }
 
 function renderHome(){
   let m=[
@@ -1215,6 +1290,8 @@ function renderHome(){
     [t('loan_due'),accounts('loan').concat(accounts('familytaken')).reduce((s,a)=>s+a.balance,0),t('loan_due_desc')]
   ];
   $('homeMetrics').innerHTML=m.map((x,i)=>`<button type="button" class="card metric" onclick="showMetricDetail(${i})"><small>${x[0]}</small><strong>${money(x[1])}</strong><div class="sub">${x[2]}</div><div class="tap-hint">${t('tap_details')}</div></button>`).join('');
+  const saving=monthToDateSaving(), savingTile=$('monthSavingTile'), savingValue=$('monthSavingValue');
+  if(savingTile&&savingValue){savingTile.classList.toggle('negative',saving.value<0);savingValue.textContent=(saving.value>0?'+':'')+money(saving.value);savingValue.style.color=saving.value<0?'#b91c1c':saving.value>0?'#15803d':'inherit';}
   let netHtml=`<button type="button" class="card metric tone-net big-net-card" onclick="showMetricDetail(4)" style="width:100%;display:block;padding:20px;text-align:left;">
     <div class="row"><small style="font-size:14px;font-weight:800;color:#3730a3;">${t('net_worth')}</small><span style="font-size:28px;">💎</span></div>
     <strong class="${networth()<0?'negative':''}" style="font-size:32px;margin-top:15px;display:block;color:#5b21b6;">${money(networth())}</strong>
@@ -1347,7 +1424,7 @@ function renderHistory(){
     return match(acct(x.accountId))||(x.changes||[]).some(c=>match(acct(c.id)));
   });
   tx.sort((a,b)=>b.date.localeCompare(a.date));
-  const expTx=tx.filter(x=>x.type==='expense');
+  const expTx=tx.filter(isExpenseTxn);
   const expTotal=expTx.reduce((s,x)=>s+(Number(x.amount)||0),0);
   $('historyTotal').textContent=tx.length+' '+t('entries');
   const summary=`<div class="item"><div class="row"><div><strong>${t('total_expense')}</strong><div class="muted">${expTx.length} ${t('expense_entries')}</div></div><strong class="negative">${money(expTotal)}</strong></div></div>`;
@@ -1393,8 +1470,8 @@ function downloadStatement(type){
     if(!w){alert(t('popup_blocked'));return}
     let totalExp=0;
     let rowsHtml=txns.map(x=>{
-      if(x.type==='expense')totalExp+=Number(x.amount);
-      let isInc=x.isIncome,isExp=x.type==='expense';
+      if(isExpenseTxn(x))totalExp+=Number(x.amount);
+      let isInc=x.isIncome,isExp=isExpenseTxn(x);
       let col=isInc?'#145c50':(isExp?'#b42318':'#172b27');
       let sign=isInc?'+':(isExp?'-':'');
       return `<tr><td>${esc(x.date)}</td><td><strong>${esc(x.desc)}</strong><br><small>${esc(label(acct(x.accountId)))} ${x.note?'· '+esc(x.note):''}</small></td><td>${esc(x.type)}</td><td style="text-align:right; color:${col}; font-weight:bold;">${sign}${money(x.amount)}</td></tr>`;
@@ -1411,46 +1488,75 @@ function __canvasSetup(canvas,minH=190){
   let h=Math.max(minH,Math.floor(rect.height||parseFloat(getComputedStyle(canvas).height)||minH));
   let dpr=Math.min(2,window.devicePixelRatio||1);
   canvas.style.width='100%';canvas.style.height=h+'px';
-  canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);
+  canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);canvas._chartLogicalWidth=w;canvas._chartLogicalHeight=h;
   let ctx;try{ctx=canvas.getContext('2d')}catch(e){return null}
   if(!ctx)return null;
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
   return {ctx,w,h};
 }
+const chartHitMaps=new WeakMap();
+function chartBubble(canvas){
+  const wrap=canvas?.parentElement;if(!wrap)return null;
+  let b=wrap.querySelector('.chart-bubble');if(!b){b=document.createElement('div');b.className='chart-bubble';wrap.appendChild(b)}return b;
+}
+function showChartBubble(canvas,evt,text){
+  const b=chartBubble(canvas);if(!b)return;
+  const r=canvas.getBoundingClientRect(),wr=canvas.parentElement.getBoundingClientRect();
+  const x=Math.max(12,Math.min(wr.width-100,evt.clientX-wr.left));
+  const y=Math.max(8,evt.clientY-wr.top-48);
+  b.innerHTML=text;b.style.left=x+'px';b.style.top=y+'px';b.classList.add('show');
+  clearTimeout(b._hideTimer);b._hideTimer=setTimeout(()=>b.classList.remove('show'),4500);
+}
+function installChartTouch(canvas){
+  if(!canvas||canvas._chartTouchInstalled)return;canvas._chartTouchInstalled=true;
+  const handler=e=>{
+    const map=chartHitMaps.get(canvas);if(!map||!map.length)return;
+    const rect=canvas.getBoundingClientRect(),sx=(canvas._chartLogicalWidth||canvas.width)/rect.width,sy=(canvas._chartLogicalHeight||canvas.height)/rect.height;
+    const x=(e.clientX-rect.left)*sx,y=(e.clientY-rect.top)*sy;
+    let hit=null,best=Infinity;
+    for(const h of map){let d=h.kind==='bar'?(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h?0:Infinity):Math.hypot(x-h.x,y-h.y);
+      if(h.kind==='point'&&d>18)continue;
+      if(h.kind==='arc'){const dx=x-h.cx,dy=y-h.cy,rr=Math.hypot(dx,dy),ang=Math.atan2(dy,dx);let a=ang;if(a< -Math.PI/2)a+=Math.PI*2;d=(rr>=h.inner&&rr<=h.outer&&a>=h.start&&a<=h.end)?0:Infinity;}
+      if(d<best){best=d;hit=h;}}
+    if(hit){e.preventDefault();e.stopPropagation();showChartBubble(canvas,e,hit.text)}
+  };
+  canvas.addEventListener('click',handler);canvas.addEventListener('touchend',e=>{if(e.changedTouches?.length){const t=e.changedTouches[0];handler({clientX:t.clientX,clientY:t.clientY,preventDefault(){e.preventDefault()},stopPropagation(){e.stopPropagation()}})}},{passive:false});
+  canvas.addEventListener('mouseleave',()=>chartBubble(canvas)?.classList.remove('show'));
+}
+function chartPointText(label,name,value){return `<div>${esc(label)}</div><div>${esc(name)}: ${money(value)}</div>`}
 function drawGroupedIncomeExpense(canvas,labels,incomes,expenses){
   const z=__canvasSetup(canvas,240);if(!z)return;
   const {ctx,w,h}=z,pL=50,pR=15,top=35,bottom=h-35,plotH=bottom-top,plotW=w-pL-pR;
-  const max=Math.max(1,...incomes,...expenses);
+  const max=Math.max(1,...incomes,...expenses),hits=[];
   ctx.font='bold 11px sans-serif';ctx.textAlign='left';
   [[t('chart_income'),'#2563eb'],[t('chart_expense'),'#dc2626']].forEach((it,i)=>{let x=pL+i*90;ctx.fillStyle=it[1];ctx.beginPath();ctx.roundRect(x,10,12,12,3);ctx.fill();ctx.fillStyle='#172b27';ctx.fillText(it[0],x+18,20);});
   for(let k=0;k<4;k++){let y=top+k*plotH/3;ctx.strokeStyle='#e8f0ed';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(w-pR,y);ctx.stroke();ctx.fillStyle='#8aa09b';ctx.textAlign='right';ctx.fillText(Math.round(max*(1-k/3)).toLocaleString('en-IN'),pL-8,y+4)}
   let slot=plotW/Math.max(1,labels.length),bw=Math.min(26,slot*.3);
-  labels.forEach((lab,i)=>{let cx=pL+slot*(i+.5);[[incomes[i]||0,'#2563eb',-bw*.55],[expenses[i]||0,'#dc2626',bw*.55]].forEach(([v,c,off])=>{let bh=Math.max(0,v/max*(plotH-10));let x=cx+off-bw/2,y=bottom-bh;let grd=ctx.createLinearGradient(0,y,0,bottom);grd.addColorStop(0,c);grd.addColorStop(1,c+'40');ctx.fillStyle=grd;ctx.beginPath();ctx.roundRect(x,y,bw,bh,[6,6,0,0]);ctx.fill();});ctx.fillStyle='#687b76';ctx.textAlign='center';ctx.font='11px sans-serif';ctx.fillText(lab,cx,h-12)})
+  labels.forEach((lab,i)=>{let cx=pL+slot*(i+.5);[[incomes[i]||0,'#2563eb',-bw*.55,t('chart_income')],[expenses[i]||0,'#dc2626',bw*.55,t('chart_expense')]].forEach(([v,c,off,nm])=>{let bh=Math.max(0,v/max*(plotH-10));let x=cx+off-bw/2,y=bottom-bh;let grd=ctx.createLinearGradient(0,y,0,bottom);grd.addColorStop(0,c);grd.addColorStop(1,c+'40');ctx.fillStyle=grd;ctx.beginPath();ctx.roundRect(x,y,bw,bh,[6,6,0,0]);ctx.fill();hits.push({kind:'bar',x,y,w:bw,h:Math.max(bh,8),text:chartPointText(lab,nm,v)});});ctx.fillStyle='#687b76';ctx.textAlign='center';ctx.font='11px sans-serif';ctx.fillText(lab,cx,h-12)});
+  chartHitMaps.set(canvas,hits);installChartTouch(canvas);
 }
 function drawLineChart(canvas,labels,series){
   const z=__canvasSetup(canvas,190);if(!z)return;
   const {ctx,w,h}=z,pL=50,pR=15,top=35,bottom=h-35,plotW=w-pL-pR,plotH=bottom-top;
-  const colors=['#059669','#dc2626','#7c3aed'];
+  const colors=['#059669','#dc2626','#7c3aed'],hits=[];
   for(let k=0;k<4;k++){let y=top+k*plotH/3;ctx.strokeStyle='#e8f0ed';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pL,y);ctx.lineTo(w-pR,y);ctx.stroke();}
-  const scaled=series.map(s=>{const vals=s.values.map(v=>Number(v)||0);const max=Math.max(1,...vals.map(v=>Math.abs(v)));return {...s,vals:vals.map(v=>v/max),max}});
-  scaled.forEach((s,si)=>{const color=colors[si%colors.length];ctx.save();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.lineJoin='round';ctx.shadowColor='rgba(0,0,0,0.15)';ctx.shadowBlur=6;ctx.shadowOffsetY=3;ctx.beginPath();s.vals.forEach((v,i)=>{const x=pL+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));const y=bottom-((v+1)/2)*plotH;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();ctx.restore();s.vals.forEach((v,i)=>{const x=pL+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));const y=bottom-((v+1)/2)*plotH;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.fill();})});
-  let lx=pL;ctx.font='bold 11px sans-serif';
-  scaled.forEach((s,i)=>{const color=colors[i%colors.length];ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(lx,10,12,12,3);ctx.fill();ctx.fillStyle='#172b27';ctx.textAlign='left';const name=s.name;ctx.fillText(name,lx+18,20);lx+=Math.min(150,ctx.measureText(name).width+40)});
-  labels.forEach((l,i)=>{const x=pL+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));ctx.fillStyle='#687b76';ctx.textAlign='center';ctx.font='11px sans-serif';ctx.fillText(l,x,h-12)})
+  const scaled=series.map(s=>{const vals=s.values.map(v=>Number(v)||0);const max=Math.max(1,...vals.map(v=>Math.abs(v)));return {...s,vals:vals.map(v=>v/max),raw:vals,max}});
+  scaled.forEach((s,si)=>{const color=colors[si%colors.length];ctx.save();ctx.strokeStyle=color;ctx.lineWidth=3;ctx.lineJoin='round';ctx.shadowColor='rgba(0,0,0,0.15)';ctx.shadowBlur=6;ctx.shadowOffsetY=3;ctx.beginPath();s.vals.forEach((v,i)=>{const x=pL+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));const y=bottom-((v+1)/2)*plotH;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();ctx.restore();s.vals.forEach((v,i)=>{const x=pL+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));const y=bottom-((v+1)/2)*plotH;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,3.5,0,Math.PI*2);ctx.fill();hits.push({kind:'point',x,y,text:chartPointText(labels[i],s.name,s.raw[i])});})});
+  let lx=pL;ctx.font='bold 11px sans-serif';scaled.forEach((s,i)=>{const color=colors[i%colors.length];ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(lx,10,12,12,3);ctx.fill();ctx.fillStyle='#172b27';ctx.textAlign='left';const name=s.name;ctx.fillText(name,lx+18,20);lx+=Math.min(150,ctx.measureText(name).width+40)});
+  labels.forEach((l,i)=>{const x=pL+(labels.length<=1?plotW/2:i*plotW/(labels.length-1));ctx.fillStyle='#687b76';ctx.textAlign='center';ctx.font='11px sans-serif';ctx.fillText(l,x,h-12)});
+  chartHitMaps.set(canvas,hits);installChartTouch(canvas);
 }
 function drawDonut(canvas,items){
   const z=__canvasSetup(canvas,240);if(!z)return;
-  const {ctx,w,h}=z;
+  const {ctx,w,h}=z,hits=[];
   const total=items.reduce((s,x)=>s+(Number(x.value)||0),0);
   const colors=['#dc2626','#ec4899','#f59e0b','#0ea5e9','#10b981','#ef4444','#8b5cf6','#f97316'];
-  if(total<=0){ctx.fillStyle='#8aa09b';ctx.font='14px sans-serif';ctx.textAlign='center';ctx.fillText(t('no_expense_period'),w/2,h/2);return;}
+  if(total<=0){ctx.fillStyle='#8aa09b';ctx.font='14px sans-serif';ctx.textAlign='center';ctx.fillText(t('no_expense_period'),w/2,h/2);chartHitMaps.set(canvas,[]);installChartTouch(canvas);return;}
   const cx=w*.3,cy=h*.5,r=Math.min(h*.36,w*.22);let a=-Math.PI/2;
-  items.forEach((it,i)=>{let next=a+(it.value/total)*Math.PI*2;ctx.beginPath();ctx.arc(cx,cy,r,a,next);ctx.arc(cx,cy,r*.6,next,a,true);ctx.closePath();ctx.fillStyle=colors[i%colors.length];ctx.shadowColor='rgba(0,0,0,0.1)';ctx.shadowBlur=6;ctx.shadowOffsetY=2;ctx.fill();a=next;});
-  ctx.shadowColor='transparent';
-  ctx.fillStyle='#172b27';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText(t('total'),cx,cy-4);
-  ctx.font='12px sans-serif';ctx.fillStyle='#687b76';ctx.fillText(money(total),cx,cy+14);
-  ctx.font='12px sans-serif';
-  items.slice(0,Math.max(1,Math.floor((h-30)/30))).forEach((it,i)=>{const y=30+i*28;ctx.fillStyle=colors[i%colors.length];ctx.beginPath();ctx.arc(w*.6,y-4,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#172b27';ctx.textAlign='left';ctx.fillText(String(it.name).slice(0,18),w*.6+12,y);ctx.fillStyle='#687b76';ctx.textAlign='right';ctx.fillText(money(it.value),w-15,y);})
+  items.forEach((it,i)=>{let next=a+(it.value/total)*Math.PI*2;ctx.beginPath();ctx.arc(cx,cy,r,a,next);ctx.arc(cx,cy,r*.6,next,a,true);ctx.closePath();ctx.fillStyle=colors[i%colors.length];ctx.shadowColor='rgba(0,0,0,0.1)';ctx.shadowBlur=6;ctx.shadowOffsetY=2;ctx.fill();hits.push({kind:'arc',cx,cy,inner:r*.6,outer:r,start:a< -Math.PI/2?a+Math.PI*2:a,end:next< -Math.PI/2?next+Math.PI*2:next,text:`<div>${esc(it.name)}</div><div>${money(it.value)}</div>`});a=next;});
+  ctx.shadowColor='transparent';ctx.fillStyle='#172b27';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText(t('total'),cx,cy-4);ctx.font='12px sans-serif';ctx.fillStyle='#687b76';ctx.fillText(money(total),cx,cy+14);
+  ctx.font='12px sans-serif';items.slice(0,Math.max(1,Math.floor((h-30)/30))).forEach((it,i)=>{const y=30+i*28;ctx.fillStyle=colors[i%colors.length];ctx.beginPath();ctx.arc(w*.6,y-4,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#172b27';ctx.textAlign='left';ctx.fillText(String(it.name).slice(0,18),w*.6+12,y);ctx.fillStyle='#687b76';ctx.textAlign='right';ctx.fillText(money(it.value),w-15,y)});
+  chartHitMaps.set(canvas,hits);installChartTouch(canvas);
 }
 function networthAtMonthEnd(m){
   let bank=0,cash=0,invest=0,card=0,loan=0;
@@ -1478,13 +1584,25 @@ function renderGraph(){
   drawGroupedIncomeExpense($('incomeExpenseChart'),months.map(monthLabel),months.map(monthIncome),months.map(monthExpenses));
   drawLineChart($('trendChart'),months.map(monthLabel),[{name:t('chart_income'),values:months.map(monthIncome)},{name:t('chart_expense'),values:months.map(monthExpenses)},{name:t('chart_networth'),values:months.map(networthAtMonthEnd)}]);
   const m=monthKey(today()),byCat={};
-  db.txns.filter(x=>x.type==='expense'&&monthKey(x.date)===m).forEach(x=>{const c=acct(x.categoryId);const n=c?c.name:(x.desc||t('other_cat'));byCat[n]=(byCat[n]||0)+Number(x.amount||0)});
+  db.txns.filter(x=>isExpenseTxn(x)&&monthKey(x.date)===m).forEach(x=>{const c=acct(x.categoryId);const n=c?c.name:(x.desc||t('other_cat'));byCat[n]=(byCat[n]||0)+Number(x.amount||0)});
   const items=Object.entries(byCat).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
   drawDonut($('categoryChart'),items);
   $('categoryLegend').innerHTML=items.map(x=>`<div class="item row"><span>${esc(x.name)}</span><strong>${money(x.value)}</strong></div>`).join('')||`<div class="empty">${t('no_expense_month')}</div>`;
   renderSavings();
 }
 
+function renderDailyAverages(){
+  const monthsBack=Math.max(1,Number($('dailyAvgPeriod')?.value)||1),now=new Date(),todayNum=now.getDate();
+  const start=new Date(now.getFullYear(),now.getMonth()-(monthsBack-1),1),startKey=start.getFullYear()+'-'+String(start.getMonth()+1).padStart(2,'0');
+  const endKey=monthKey(today()),elapsedDays=Math.floor((new Date(now.getFullYear(),now.getMonth(),todayNum)-start)/86400000)+1;
+  let fullMonthDays=0;for(let i=0;i<monthsBack;i++){const d=new Date(start.getFullYear(),start.getMonth()+i,1);fullMonthDays+=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();}
+  const tx=db.txns.filter(x=>monthKey(x.date)>=startKey&&monthKey(x.date)<=endKey);
+  const income=tx.filter(x=>x.isIncome).reduce((a,x)=>a+Number(x.amount||0),0);
+  const expense=tx.filter(isExpenseTxn).reduce((a,x)=>a+Number(x.amount||0),0);
+  const dailyIncome=fullMonthDays>0?income/fullMonthDays:0,dailyExpense=elapsedDays>0?expense/elapsedDays:0,dailyNet=dailyIncome-dailyExpense;
+  const metrics=[[`${t('total_income')} (${monthsBack} ${t('months')})`,income,''],[t('daily_avg_income'),dailyIncome,''],[`${t('total_expense')} (${monthsBack} ${t('months')})`,expense,''],[t('daily_avg_expense'),dailyExpense,''],[t('daily_avg_savings_loss'),dailyNet,dailyNet<0?'negative':'positive']];
+  $('dailyAverageMetrics').innerHTML=metrics.map((m,i)=>`<div class="card metric" style="margin:0;cursor:default"><small>${m[0]}</small><strong class="${m[2]}" style="font-size:19px">${i===4?(dailyNet>=0?'+':'−')+money(Math.abs(dailyNet)):money(m[1])}</strong></div>`).join('');
+}
 function saveSavingsSettings(){db.monthlyIncomeTarget=Math.max(0,Number($('monthlyIncomeTarget').value)||0);db.monthDays=Number($('monthDays').value)||30;save();alert(t('savings_target_saved'))}
 function renderSavings(){
   if(!$('savingsMetrics'))return;
@@ -1493,7 +1611,7 @@ function renderSavings(){
   $('monthDays').value=String(db.monthDays||30);
   let m=monthKey(today()),income=monthIncome(m),expense=monthExpenses(m),net=income-expense;
   let daily=(Number(db.monthlyIncomeTarget)||0)/(Number(db.monthDays)||30);
-  let todayExp=db.txns.filter(x=>x.date===today()&&x.type==='expense').reduce((s,x)=>s+x.amount,0);
+  let todayExp=db.txns.filter(x=>x.date===today()&&isExpenseTxn(x)).reduce((s,x)=>s+x.amount,0);
   let metrics=[[t('recorded_income'),income,t('income_entries')],[t('expense_this_month_full'),expense,t('only_exp_entries')],[t('monthly_savings_loss'),net,net<0?t('exp_gt_inc'):t('income_minus_exp')]];
   $('savingsMetrics').innerHTML=metrics.map((x,i)=>`<div class="card metric"><small>${x[0]}</small><strong class="${i===2?(x[1]<0?'negative':'positive'):''}">${money(x[1])}</strong><div class="sub">${x[2]}</div></div>`).join('');
   let alertText='';
@@ -1506,6 +1624,7 @@ function renderSavings(){
   $('dailySavingsAlert').innerHTML=alertText;
   drawGroupedIncomeExpense($('savingsChart'),lastMonths().map(monthLabel),lastMonths().map(monthIncome),lastMonths().map(monthExpenses));
   $('savingsHistory').innerHTML=lastMonths().slice().reverse().map(x=>{let inc=monthIncome(x),ex=monthExpenses(x),bal=inc-ex;return `<div class="item row"><div><strong>${monthLabel(x)}</strong><div class="muted">${t('inc')} ${money(inc)} · ${t('exp')} ${money(ex)}</div></div><strong class="${bal<0?'negative':'positive'}">${money(bal)}</strong></div>`}).join('');
+  renderDailyAverages();
 }
 
 function renderAll(){renderHome();renderAccounts();setTxnFields();renderHistory();renderGraph();renderTools();renderSavings();renderProfile();renderExpenseEditList();renderIncomeEditList()}
@@ -1595,7 +1714,7 @@ function renderTools(){
   items.sort((a,b)=>a.date-b.date);
   $('dueList').innerHTML=items.length?items.map(x=>`<div class="item row"><div><strong>${esc(x.what)}</strong><div class="muted">${esc(x.who)} · ${x.date.toLocaleDateString(currentLang==='hi'?'hi-IN':'en-IN')}</div></div><strong>${money(x.amount)}</strong></div>`).join(''):`<div class="empty">${t('no_upcoming')}</div>`;
   let m=monthKey(today()),tx=db.txns.filter(x=>monthKey(x.date)===m);
-  let exp=tx.filter(x=>x.type==='expense').reduce((s,x)=>s+x.amount,0),income=monthIncome(m);
+  let exp=tx.filter(isExpenseTxn).reduce((s,x)=>s+x.amount,0),income=monthIncome(m);
   $('monthlySummary').innerHTML=`<div class="item row"><span>${t('recorded_income')}</span><strong>${money(income)}</strong></div><div class="item row"><span>${t('expense_this_month_full')}</span><strong>${money(exp)}</strong></div><div class="item row"><span>${t('diff')}</span><strong class="${income-exp<0?'negative':'positive'}">${money(income-exp)}</strong></div>`;
 }
 function togglePrivacy(){document.body.classList.toggle('privacy');$('privacyBtn').textContent=document.body.classList.contains('privacy')?t('show_amt'):t('hide_amt')}
@@ -1787,7 +1906,7 @@ function renderSmartCalendar(){
     let date=smartDateStr(y,m,d);
     let dayTx=db.txns.filter(x=>x.date===date);
     let dayInc=dayTx.filter(x=>x.isIncome===true).reduce((s,x)=>s+(Number(x.amount)||0),0);
-    let dayExp=dayTx.filter(x=>x.type==='expense').reduce((s,x)=>s+(Number(x.amount)||0),0);
+    let dayExp=dayTx.filter(isExpenseTxn).reduce((s,x)=>s+(Number(x.amount)||0),0);
     let has=dayTx.length>0;
     let sel=smartCalStart&&smartCalEnd&&date>=smartCalStart&&date<=smartCalEnd;
     let edge=date===smartCalStart?'range-start':date===smartCalEnd?'range-end':'';
@@ -1815,7 +1934,7 @@ function renderSmartTransactions(){
   if($('smartType').value)tx=tx.filter(x=>x.type===$('smartType').value);
   tx.sort((x,y)=>y.date.localeCompare(x.date));
   let inc=tx.filter(x=>x.isIncome===true),incSum=inc.reduce((s,x)=>s+(Number(x.amount)||0),0);
-  let ex=tx.filter(x=>x.type==='expense'),expSum=ex.reduce((s,x)=>s+(Number(x.amount)||0),0);
+  let ex=tx.filter(isExpenseTxn),expSum=ex.reduce((s,x)=>s+(Number(x.amount)||0),0);
   $('smartDateRange').textContent=`${t('selected_dates')}: ${a} ${currentLang==='hi'?'से':'to'} ${b} · ${tx.length} ${t('txn_word')}`;
   let summary=`<div class="item row"><div><strong>${t('total_income')}</strong><div class="muted">${inc.length} ${t('income_entries')}</div></div><strong class="positive">${money(incSum)}</strong></div><div class="item row"><div><strong>${t('total_expense')}</strong><div class="muted">${ex.length} ${t('expense_entries')}</div></div><strong class="negative">${money(expSum)}</strong></div>`;
   out.innerHTML=summary+(tx.map(txnHTML).join('')||`<div class="empty">${t('nothing_period')}</div>`);
@@ -1826,7 +1945,7 @@ function passbookView(which){$('passView').classList.toggle('active',which==='vi
 function passFilterMode(mode,btn){passMode=mode;document.querySelectorAll('#passView .mini-tabs button').forEach(b=>b.classList.toggle('active',b===btn));renderHistory()}
 function savingDetail(which){
   let m=monthKey(today()),tx=db.txns.filter(x=>monthKey(x.date)===m);
-  let inc=tx.filter(x=>x.isIncome);let exp=tx.filter(x=>x.type==='expense');
+  let inc=tx.filter(x=>x.isIncome);let exp=tx.filter(isExpenseTxn);
   let data=which==='income'?inc:which==='expense'?exp:[];
   let amount=which==='income'?inc.reduce((s,x)=>s+x.amount,0):which==='expense'?exp.reduce((s,x)=>s+x.amount,0):inc.reduce((s,x)=>s+x.amount,0)-exp.reduce((s,x)=>s+x.amount,0);
   let title=which==='income'?t('income_this_month'):which==='expense'?t('expense_this_month'):t('savings_loss_this_month');
