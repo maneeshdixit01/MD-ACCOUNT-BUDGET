@@ -1552,10 +1552,11 @@ function drawDonut(canvas,items){
   const total=items.reduce((s,x)=>s+(Number(x.value)||0),0);
   const colors=['#dc2626','#ec4899','#f59e0b','#0ea5e9','#10b981','#ef4444','#8b5cf6','#f97316'];
   if(total<=0){ctx.fillStyle='#8aa09b';ctx.font='14px sans-serif';ctx.textAlign='center';ctx.fillText(t('no_expense_period'),w/2,h/2);chartHitMaps.set(canvas,[]);installChartTouch(canvas);return;}
-  const cx=w*.3,cy=h*.5,r=Math.min(h*.36,w*.22);let a=-Math.PI/2;
+  // Keep the donut centered and use the HTML list below for labels/amounts.
+  // Drawing labels inside the canvas caused text collisions on narrow phones.
+  const cx=w*.5,cy=h*.5,r=Math.min(h*.42,w*.30);let a=-Math.PI/2;
   items.forEach((it,i)=>{let next=a+(it.value/total)*Math.PI*2;ctx.beginPath();ctx.arc(cx,cy,r,a,next);ctx.arc(cx,cy,r*.6,next,a,true);ctx.closePath();ctx.fillStyle=colors[i%colors.length];ctx.shadowColor='rgba(0,0,0,0.1)';ctx.shadowBlur=6;ctx.shadowOffsetY=2;ctx.fill();hits.push({kind:'arc',cx,cy,inner:r*.6,outer:r,start:a< -Math.PI/2?a+Math.PI*2:a,end:next< -Math.PI/2?next+Math.PI*2:next,text:`<div>${esc(it.name)}</div><div>${money(it.value)}</div>`});a=next;});
   ctx.shadowColor='transparent';ctx.fillStyle='#172b27';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText(t('total'),cx,cy-4);ctx.font='12px sans-serif';ctx.fillStyle='#687b76';ctx.fillText(money(total),cx,cy+14);
-  ctx.font='12px sans-serif';items.slice(0,Math.max(1,Math.floor((h-30)/30))).forEach((it,i)=>{const y=30+i*28;ctx.fillStyle=colors[i%colors.length];ctx.beginPath();ctx.arc(w*.6,y-4,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#172b27';ctx.textAlign='left';ctx.fillText(String(it.name).slice(0,18),w*.6+12,y);ctx.fillStyle='#687b76';ctx.textAlign='right';ctx.fillText(money(it.value),w-15,y)});
   chartHitMaps.set(canvas,hits);installChartTouch(canvas);
 }
 function networthAtMonthEnd(m){
