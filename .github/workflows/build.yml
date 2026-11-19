@@ -54,7 +54,83 @@ jobs:
         run: |
           npx cap add android
 
-          # Update SDK versions to API 36 & increment versionCode to 2
+          # Update SDK versions to 36 in both variables.gradle and app/build.gradle
           sed -i 's/minSdkVersion = [0-9]*/minSdkVersion = 24/g' android/variables.gradle
           sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 36/g' android/variables.gradle
           sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 36/g' android/variables.gradle
+
+          sed -i 's/compileSdk [0-9]*/compileSdk 36/g' android/app/build.gradle
+          sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 36/g' android/app/build.gradle
+          sed -i 's/targetSdk [0-9]*/targetSdk 36/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 36/g' android/app/build.gradle
+
+          # Increment versionCode to 2 and versionName to 1.1
+          sed -i 's/versionCode [0-9]*/versionCode 2/g' android/app/build.gradle
+          sed -i 's/versionName "[^"]*"/versionName "1.1"/g' android/app/build.gradle
+
+          mkdir -p assets
+
+          if [ -f "icon-512.png" ]; then
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+
+            convert icon-512.png -resize 1024x1024\! assets/icon-only.png
+            cp assets/icon-only.png assets/icon-foreground.png
+            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
+            convert icon-512.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
+
+            npx capacitor-assets generate --android
+
+          elif [ -f "icon-192.png" ]; then
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+
+            convert icon-192.png -resize 1024x1024\! assets/icon-only.png
+            cp assets/icon-only.png assets/icon-foreground.png
+            convert -size 1024x1024 xc:"#114232" assets/icon-background.png
+            convert icon-192.png -gravity center -background "#114232" -extent 2732x2732 assets/splash.png
+
+            npx capacitor-assets generate --android
+          fi
+
+          sed -i 's|</application>|    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-5831881293330144~2578300444"/>\n    </application>|g' android/app/src/main/AndroidManifest.xml
+
+          npx cap sync android
+
+      - name: Verify SDK 36 & Version Code 2
+        run: |
+          grep -E "compileSdk|targetSdk|versionCode|versionName" android/variables.gradle android/app/build.gradle || true
+
+      - name: Prepare Keystore
+        run: |
+          if [ -f "md-release-key.jks" ]; then
+            cp md-release-key.jks android/app/md-release-key.jks
+          else
+            keytool -genkey -v -keystore android/app/md-release-key.jks \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias md_key \
+              -storepass MdAccount@123 -keypass MdAccount@123 \
+              -dname "CN=MD Accounts, OU=IT, O=MD Accounts, L=Lucknow, ST=UP, C=IN"
+
+            cp android/app/md-release-key.jks ./md-release-key.jks
+          fi
+
+      - name: Build & Sign Release AAB and APK
+        run: |
+          cd android
+          chmod +x gradlew
+
+          ./gradlew bundleRelease assembleRelease \
+            -Pandroid.injected.signing.store.file=$PWD/app/md-release-key.jks \
+            -Pandroid.injected.signing.store.password=MdAccount@123 \
+            -Pandroid.injected.signing.key.alias=md_key \
+            -Pandroid.injected.signing.key.password=MdAccount@123
+
+      - name: Upload Signed AAB, APK & Keystore
+        uses: actions/upload-artifact@v4
+        with:
+          name: MD-Accounts-Logo-Perfect-Release
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/release/*.apk
+            md-release-key.jks
