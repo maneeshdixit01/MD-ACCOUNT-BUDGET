@@ -54,29 +54,18 @@ jobs:
         run: |
           npx cap add android
 
-          # Safely set SDK 36 in variables.gradle if present
+          # Set SDK versions to 36 in variables.gradle
           if [ -f "android/variables.gradle" ]; then
+            sed -i -E 's/(minSdkVersion\s*=\s*)[0-9]+/\124/g' android/variables.gradle
             sed -i -E 's/(compileSdkVersion\s*=\s*)[0-9]+/\136/g' android/variables.gradle
             sed -i -E 's/(targetSdkVersion\s*=\s*)[0-9]+/\136/g' android/variables.gradle
           fi
 
-          # Safely set compileSdk, targetSdk, versionCode 2, and versionName 1.1 in app/build.gradle
-          python3 - <<'EOF'
-from pathlib import Path
-import re
-
-gradle_path = Path("android/app/build.gradle")
-text = gradle_path.read_text(encoding="utf-8")
-
-text = re.sub(r"\bcompileSdk\s+[0-9]+", "compileSdk 36", text)
-text = re.sub(r"\bcompileSdkVersion\s+[0-9]+", "compileSdkVersion 36", text)
-text = re.sub(r"\btargetSdk\s+[0-9]+", "targetSdk 36", text)
-text = re.sub(r"\btargetSdkVersion\s+[0-9]+", "targetSdkVersion 36", text)
-text = re.sub(r"\bversionCode\s+[0-9]+", "versionCode 2", text)
-text = re.sub(r'\bversionName\s+"[^"]*"', 'versionName "1.1"', text)
-
-gradle_path.write_text(text, encoding="utf-8")
-EOF
+          # Update versionCode to 2 and versionName to 1.1 in app/build.gradle safely
+          if [ -f "android/app/build.gradle" ]; then
+            sed -i -E 's/(versionCode\s+)[0-9]+/\12/g' android/app/build.gradle
+            sed -i -E 's/(versionName\s+")[^"]*(")/\11.1\2/g' android/app/build.gradle
+          fi
 
           mkdir -p assets
 
@@ -107,11 +96,13 @@ EOF
 
           npx cap sync android
 
-      - name: Install Android SDK 36 & Verify Config
+      - name: Install Android SDK Platform 36
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" || sdkmanager "platforms;android-36"
-          grep -E "compileSdk|targetSdk|versionCode|versionName" android/variables.gradle android/app/build.gradle || true
+          if command -v sdkmanager >/dev/null 2>&1; then
+            yes | sdkmanager --licenses >/dev/null 2>&1 || true
+            sdkmanager "platforms;android-36" "build-tools;36.0.0" || sdkmanager "platforms;android-36"
+          fi
+          grep -E "minSdkVersion|compileSdkVersion|targetSdkVersion|versionCode|versionName" android/variables.gradle android/app/build.gradle || true
 
       - name: Prepare Keystore
         run: |
